@@ -45,10 +45,11 @@ struct Token {
 } ;
 
 struct Node {
-  Token content ;
+  Token *content ;
   Node *left ;
   Node *right ;
   Node *prevNode ;
+  int subroutineNum = 0 ;
 } ;
 
 int g_uTestNum ;
@@ -671,15 +672,15 @@ public:
   bool IsExit( const Node *temp ) {
 
     if ( temp == NULL ) return false ;
-    else if ( temp->content.type != LEFT_PAREN ) return false ;
+    else if ( temp->content->type != LEFT_PAREN ) return false ;
     temp = temp->right ;
 
     if ( temp == NULL ) return false ;
-    else if ( temp->content.value != "exit" ) return false ;
+    else if ( temp->content->value != "exit" ) return false ;
     temp = temp->right ;
 
     if ( temp == NULL ) return false ;
-    else if ( temp->content.type != RIGHT_PAREN ) return false ;
+    else if ( temp->content->type != RIGHT_PAREN ) return false ;
     
     return true ;
 
@@ -695,16 +696,21 @@ private:
   vector<Node*> *mRoots_ ;
   vector<Token> *mTokensList_ ;
 
+  Token mCurToken_ ;
+  int mCurSubroutine_ ;
+
   // create and initialize new Atom
-  Node* CreatNewNode() {
+  Node* CreateANewNode() {
     Node *oneNode = new Node() ;
 
     oneNode->left = NULL ;
     oneNode->right = NULL ;
     oneNode->prevNode = NULL ;
+    oneNode->content = NULL ;
+    oneNode->subroutineNum = mCurSubroutine_ ;
 
     return oneNode ;
-  } // CreatNewNode()
+  } // CreateANewNode()
 
   bool IsAtom( Token* token ) {
     TokenType type = token->type ;
@@ -714,75 +720,108 @@ private:
              type != QUOTE ) ;
   } // IsAtom()
 
-  Node* Build( vector<Token> *tokens ) {
+  Node* BuildSequence( vector<Token> *tokens ) {
 
     //  basic step
     if ( tokens->size() <= 0 ) {
       return NULL ;
     } // if
     
-    Node* temp = CreatNewNode() ;
-    temp->content = tokens->front() ;
+    Node* temp = CreateANewNode() ;
+    Token newToken = tokens->front() ;
     tokens->erase( tokens->begin() ) ;
-    temp->right = Build( tokens ) ;
+    temp->content = &newToken ;
+    temp->right = BuildSequence( tokens ) ;
 
     return temp ;
-  } // Build()
+  } // BuildSequence()
 
-  void CreateNewRightNode( Node* &root, bool &goRight ) {
-    goRight = false ;
-    root->right = CreatNewNode() ;
-    root->right->prevNode = root ;
-    BuildTree( root->right, goRight ) ;
-    root = root->right ;
-  } // CreateNewRightNode()
+  // void CreateNewRightNode( Node* &root, bool &goRight ) {
+  //   goRight = false ;
+  //   root->right = CreateANewNode() ;
+  //   root->right->prevNode = root ;
+  //   // BuildTree( root->right, goRight ) ;
+  // } // CreateNewRightNode()
 
-  void CreateNewLeftNode( Node* &root, bool &goRight ) {
-      root->left = CreatNewNode() ;
-      root->left->prevNode = root ;
-      BuildTree( root->left, goRight ) ;
-      root = root->left ;
-  } // CreateNewLeftNode()
+  // void CreateNewLeftNode( Node* &root, bool &goRight ) {
+  //     root->left = CreateANewNode() ;
+  //     root->left->prevNode = root ;
+  //     // BuildTree( root->left, goRight ) ;
+  // } // CreateNewLeftNode()
 
-  // Build A Tree Sturcture to store current token list
-  void BuildTree( Node* &root, bool &goRight ) {
-      Token curToken = mTokensList_->front() ; // Get first token
-      mTokensList_->erase( mTokensList_->begin() ) ;
+  Token GetNextToken() {
+    mCurToken_ = mTokensList_->front() ; // Get first token
+    mTokensList_->erase( mTokensList_->begin() ) ;
+    // cout << mCurToken_.value ;
+    return mCurToken_ ;
+  } // GetNextToken()
+
+  Token PeekNextToken() {
+    return mTokensList_->front() ; // Get first token ;
+  } // PeekNextToken()
+
+  Node* BuildCons() {
+    
+    mCurSubroutine_++ ;
+
+    Node* root = CreateANewNode() ;
+    Node* temp = root ;
+
+    if ( mCurToken_.type == LEFT_PAREN ) {
       
-      if ( curToken.type == LEFT_PAREN ) {
-        if ( goRight ) {
-          CreateNewRightNode( root, goRight ) ;
-        } // if Right
-        else {
-          CreateNewLeftNode( root, goRight ) ;
-        }
-        while ( curToken.type == LEFT_PAREN || IsAtom( &curToken ) ) {
-          CreateNewLeftNode( root, goRight ) ;
-        }
+      GetNextToken() ;
 
-        if ( curToken.type == DOT ) {
-          goRight = true ;
-        }
-      }
-      else if ( IsAtom( &curToken ) || curToken.type == QUOTE ) {
-        root->content = curToken ;
-      }
-  } // BuildTree
+      if ( IsAtom( &mCurToken_ ) ) {
+        temp->content = &mCurToken_ ;
+        // temp->subroutineNum = mCurSubroutine_ ;
+        GetNextToken() ;
+      } // if
 
-  // TODO
-  void InorderTraversal( Node* root ) {
-    if ( root == NULL ) {
-        return ;
+      while ( IsAtom( &mCurToken_ ) ) {
+        temp->left = CreateANewNode() ;
+        temp = temp->left ;
+        temp->content = &mCurToken_ ;
+        // temp->subroutineNum = mCurSubroutine_ ;
+        GetNextToken() ;
+      } // while
+
+      if ( mCurToken_.type == LEFT_PAREN ) {
+        temp->left = BuildCons() ;
+      } // if 
+
+      if ( mCurToken_.type == DOT ) {
+        temp = CreateANewNode() ;
+        temp->left = root ;
+        root = temp ;
+        GetNextToken() ;
+
+        if ( mCurToken_.type == LEFT_PAREN ) {
+          temp->right = BuildCons() ;
+        } // if: New Cons
+        else if ( IsAtom( &mCurToken_ ) ) {
+          temp->right = CreateANewNode() ;
+          temp = temp->right ;
+          temp->content = &mCurToken_ ;
+          // temp->subroutineNum = mCurSubroutine_ ;
+          GetNextToken() ;
+        } // else if
+
+      } // if: Dot
+
+      if ( mCurToken_.type == RIGHT_PAREN ) {
+        mCurSubroutine_-- ;
+        return root ;
+      } // if
+
     } // if
-    InorderTraversal(root->left);
-    cout << root->content.value << " " ;
-    InorderTraversal(root->right);
-  } // InorderTraversal()
+    return NULL ;
+
+  } // BuildCons()
 
   // Print string to consol
-  void PrintString( const Token& strToken ) {
+  void PrintString( const Token* strToken ) {
 
-    const string STR = strToken.value ;
+    const string STR = strToken->value ;
     const int SIZE = STR.size() ;
 
     for ( int i = 0 ; i < SIZE ; i++ ) {
@@ -819,9 +858,9 @@ private:
     cout << endl ;
   } // PrintString()
 
-  void PrintFloat( const Token& pointToken ) {
+  void PrintFloat( const Token* pointToken ) {
     
-    string buffer = pointToken.value ;
+    string buffer = pointToken->value ;
 
     // Sign bit
     if ( buffer[0] == '+' ) {
@@ -838,8 +877,8 @@ private:
 
   } // PrintFloat()
 
-  void PrintInt( const Token& strToken ) {
-    const string INTEGER = strToken.value ;
+  void PrintInt( const Token* strToken ) {
+    const string INTEGER = strToken->value ;
     int startingPos = 0 ;
 
     if ( INTEGER[startingPos] == '+' ) startingPos++ ;
@@ -852,19 +891,29 @@ private:
 
   } // PrintInt()
 
-  // Create A New Tree For Current Token List
-  void CreatANewTree() {
-    Node* TreeRoot = CreatNewNode() ;
-    bool goRight = false ;
-    BuildTree( TreeRoot, goRight ) ;
-    mRoots_->push_back( TreeRoot ) ;
-  } // CreatANewTree()
+  void SetTokenList( vector<Token>* tokenList ) {
+    mTokensList_ = tokenList ;
+  } // SetTokenList()
+
+  void PrintSpacese() {
+    for ( int i = 0 ; i < mCurSubroutine_ ; i++ ) {
+      cout << "  " ;
+    } // for
+  } // PrintSpace()
+
+  void PrintNodeToken( Node *temp ) {
+    if ( temp->content->type == STRING ) PrintString( temp->content ) ;
+    else if ( temp->content->type == FLOAT ) PrintFloat( temp->content ) ;
+    else if ( temp->content->type == INT ) PrintInt( temp->content ) ;
+    else cout << temp->content->value << endl ;
+  } // PrintNodeToken()
 
 public:
   
   Tree() {
     mRoots_ = new vector<Node*>() ;
     mTokensList_ = new vector<Token>() ;
+    mCurSubroutine_ = 0 ;
   } // Tree()
 
   void PrintNodes( Node *head ) {
@@ -872,19 +921,52 @@ public:
     Node *temp = head ;
     
     while ( temp != NULL ) {
-      if ( temp->content.type == STRING ) PrintString( temp->content ) ;
-      else if ( temp->content.type == FLOAT ) PrintFloat( temp->content ) ;
-      else if ( temp->content.type == INT ) PrintInt( temp->content ) ;
-      else cout << temp->content.value << endl ;
+      if ( temp->content->type == STRING ) PrintString( temp->content ) ;
+      else if ( temp->content->type == FLOAT ) PrintFloat( temp->content ) ;
+      else if ( temp->content->type == INT ) PrintInt( temp->content ) ;
+      else cout << temp->content->value << endl ;
       temp = temp->right ;
     } // while
 
   } // PrintNodes()
 
-  void SetTokenList( vector<Token>* tokenList ) {
-    mTokensList_ = tokenList ;
-  } // SetTokenList()
+  void PrettyPrintNodes( Node *head ) {
+    
 
+    Node *temp = head ;
+
+    if ( temp->subroutineNum > mCurSubroutine_ ) { 
+      cout << "( " ;
+      mCurSubroutine_++ ;
+    } // if
+
+    if ( temp->content != NULL ) {
+      PrintSpacese() ;
+      PrintNodeToken( temp ) ;
+    } // if
+
+    if ( temp->left != NULL ) {
+      PrettyPrintNodes( temp->left ) ;
+    } // if
+    else if ( temp->right != NULL ) {
+      PrettyPrintNodes( temp->right ) ;
+    } // else if
+
+  } // PrettyPrintNodes()
+
+  // Create A New Tree For Current Token List
+  void CreatANewTree( vector<Token>* tokenList ) {
+
+    // push tokenList in 
+    SetTokenList( tokenList ) ;
+
+    GetNextToken() ;
+    Node* TreeRoot = NULL ;
+    TreeRoot = BuildCons() ;
+    mRoots_->push_back( TreeRoot ) ;
+  } // CreatANewTree()
+
+  // return current tree root
   Node *GetCurrentRoot() {
     if ( !mRoots_->empty() ) return mRoots_->back() ;
     return NULL ;
@@ -917,7 +999,8 @@ private:
       mTokenTable_->push_back( tokenList ) ; // push token list into token table to record
 
       // Building A Tree
-      mAtomTree_.SetTokenList( tokenList ) ; // Set a tokenList in Tree structure
+      // mAtomTree_.SetTokenList( tokenList ) ; // Set a tokenList in Tree structure
+      mAtomTree_.CreatANewTree( tokenList ) ;
       
       // Clear Tokens
       tokenList->clear() ;
@@ -943,7 +1026,7 @@ public:
         ReadSExp() ;
         Node *curAtomRoot = mAtomTree_.GetCurrentRoot() ;
         if ( mEvaluator_.IsExit( curAtomRoot ) ) mQuit_ = true ;
-        else mAtomTree_.PrintNodes( curAtomRoot ) ;
+        else mAtomTree_.PrettyPrintNodes( curAtomRoot ) ; // Pretty print
 
       } // try
       catch ( const Exception& e ) {
