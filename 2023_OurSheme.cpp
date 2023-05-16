@@ -671,16 +671,8 @@ public:
 
   bool IsExit( const Node *temp ) {
 
-    if ( temp == NULL ) return false ;
-    else if ( temp->content->type != LEFT_PAREN ) return false ;
-    temp = temp->right ;
-
-    if ( temp == NULL ) return false ;
+    if ( temp == NULL || temp->content == NULL ) return false ;
     else if ( temp->content->value != "exit" ) return false ;
-    temp = temp->right ;
-
-    if ( temp == NULL ) return false ;
-    else if ( temp->content->type != RIGHT_PAREN ) return false ;
     
     return true ;
 
@@ -743,22 +735,26 @@ private:
   //   // BuildTree( root->right, goRight ) ;
   // } // CreateNewRightNode()
 
-  // void CreateNewLeftNode( Node* &root, bool &goRight ) {
-  //     root->left = CreateANewNode() ;
-  //     root->left->prevNode = root ;
-  //     // BuildTree( root->left, goRight ) ;
-  // } // CreateNewLeftNode()
+  void SaveToLeftNode( Node* &temp ) {
+      temp->left = CreateANewNode() ;
+      temp = temp->left ;
+      temp->content = CopyCurToken() ;
+  } // CreateNewLeftNode()
 
   Token GetNextToken() {
     mCurToken_ = mTokensList_->front() ; // Get first token
     mTokensList_->erase( mTokensList_->begin() ) ;
-    // cout << mCurToken_.value ;
     return mCurToken_ ;
   } // GetNextToken()
 
   Token PeekNextToken() {
     return mTokensList_->front() ; // Get first token ;
   } // PeekNextToken()
+
+  Token* CopyCurToken() {
+    Token* newToken = new Token( mCurToken_ ) ;
+    return newToken ;
+  } // CopyCurToken()
 
   Node* BuildCons() {
     
@@ -771,23 +767,26 @@ private:
       
       GetNextToken() ;
 
-      if ( IsAtom( &mCurToken_ ) ) {
-        temp->content = &mCurToken_ ;
-        // temp->subroutineNum = mCurSubroutine_ ;
-        GetNextToken() ;
-      } // if
-
-      while ( IsAtom( &mCurToken_ ) ) {
-        temp->left = CreateANewNode() ;
-        temp = temp->left ;
-        temp->content = &mCurToken_ ;
-        // temp->subroutineNum = mCurSubroutine_ ;
+      while ( IsAtom( &mCurToken_ ) || mCurToken_.type == LEFT_PAREN ) {
+        if ( IsAtom( &mCurToken_ ) ) {
+          if ( temp->content == NULL && temp->left == NULL ) {
+            temp->content = CopyCurToken() ; 
+          }
+          else {
+            SaveToLeftNode( temp ) ;
+          }
+          cout << "Save Token: " << " (" << temp->subroutineNum << ") " << temp->content->value << endl ; // DEBUG
+        }
+        else if ( mCurToken_.type == LEFT_PAREN ) {
+          temp->left = BuildCons() ;
+          while ( temp->left != NULL ) temp = temp->left ;
+        }
         GetNextToken() ;
       } // while
 
-      if ( mCurToken_.type == LEFT_PAREN ) {
-        temp->left = BuildCons() ;
-      } // if 
+      while ( root->content == NULL && root->left != NULL && root->right == NULL ) {
+        root = root->left ;
+      } // while: clear empty node
 
       if ( mCurToken_.type == DOT ) {
         temp = CreateANewNode() ;
@@ -797,12 +796,13 @@ private:
 
         if ( mCurToken_.type == LEFT_PAREN ) {
           temp->right = BuildCons() ;
+          GetNextToken() ;
         } // if: New Cons
         else if ( IsAtom( &mCurToken_ ) ) {
           temp->right = CreateANewNode() ;
           temp = temp->right ;
-          temp->content = &mCurToken_ ;
-          // temp->subroutineNum = mCurSubroutine_ ;
+          temp->content = CopyCurToken() ;
+          cout << "Save Token: " << " (" << temp->subroutineNum << ") " << temp->content->value << endl ; // DEBUG
           GetNextToken() ;
         } // else if
 
@@ -810,11 +810,12 @@ private:
 
       if ( mCurToken_.type == RIGHT_PAREN ) {
         mCurSubroutine_-- ;
+        // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
         return root ;
       } // if
 
     } // if
-    return NULL ;
+    return root ;
 
   } // BuildCons()
 
@@ -934,10 +935,12 @@ public:
     
 
     Node *temp = head ;
-
+    cout << "[" << temp->subroutineNum << "]" ; // DEBUG
+    cout << "[" << mCurSubroutine_ << "]" ; // DEBUG
+    
     if ( temp->subroutineNum > mCurSubroutine_ ) { 
-      cout << "( " ;
-      mCurSubroutine_++ ;
+      cout << "(" ;
+      mCurSubroutine_ = temp->subroutineNum ;
     } // if
 
     if ( temp->content != NULL ) {
@@ -948,9 +951,12 @@ public:
     if ( temp->left != NULL ) {
       PrettyPrintNodes( temp->left ) ;
     } // if
-    else if ( temp->right != NULL ) {
+
+    if ( temp->right != NULL ) {
       PrettyPrintNodes( temp->right ) ;
-    } // else if
+    } // eif
+
+    mCurSubroutine_-- ;
 
   } // PrettyPrintNodes()
 
@@ -964,6 +970,7 @@ public:
     Node* TreeRoot = NULL ;
     TreeRoot = BuildCons() ;
     mRoots_->push_back( TreeRoot ) ;
+    mCurSubroutine_ = 0 ;
   } // CreatANewTree()
 
   // return current tree root
@@ -999,7 +1006,6 @@ private:
       mTokenTable_->push_back( tokenList ) ; // push token list into token table to record
 
       // Building A Tree
-      // mAtomTree_.SetTokenList( tokenList ) ; // Set a tokenList in Tree structure
       mAtomTree_.CreatANewTree( tokenList ) ;
       
       // Clear Tokens
@@ -1027,7 +1033,6 @@ public:
         Node *curAtomRoot = mAtomTree_.GetCurrentRoot() ;
         if ( mEvaluator_.IsExit( curAtomRoot ) ) mQuit_ = true ;
         else mAtomTree_.PrettyPrintNodes( curAtomRoot ) ; // Pretty print
-
       } // try
       catch ( const Exception& e ) {
         
@@ -1036,7 +1041,7 @@ public:
         else mSyntaxAnalyzer_.ClearRestOfCharInThisLine() ;
 
         // if ( g_uTestNum == 1 )  mQuit_ = true ; // debug
-
+        
         gLineNum = 1 ;
         gColumn = 0 ; // while read the first char, col will add 1 automatically
       } // catch
