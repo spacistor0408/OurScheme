@@ -48,8 +48,8 @@ struct Node {
   Token *content ;
   Node *left ;
   Node *right ;
-  Node *prevNode ;
   int subroutineNum = 0 ;
+  bool visited ;
 } ;
 
 int g_uTestNum ;
@@ -690,6 +690,7 @@ private:
 
   Token mCurToken_ ;
   int mCurSubroutine_ ;
+  int mPrintLeftBracketCount_ ;
 
   // create and initialize new Atom
   Node* CreateANewNode() {
@@ -697,9 +698,9 @@ private:
 
     oneNode->left = NULL ;
     oneNode->right = NULL ;
-    oneNode->prevNode = NULL ;
     oneNode->content = NULL ;
     oneNode->subroutineNum = mCurSubroutine_ ;
+    oneNode->visited = false ;
 
     return oneNode ;
   } // CreateANewNode()
@@ -712,22 +713,6 @@ private:
              type != QUOTE ) ;
   } // IsAtom()
 
-  Node* BuildSequence( vector<Token> *tokens ) {
-
-    //  basic step
-    if ( tokens->size() <= 0 ) {
-      return NULL ;
-    } // if
-    
-    Node* temp = CreateANewNode() ;
-    Token newToken = tokens->front() ;
-    tokens->erase( tokens->begin() ) ;
-    temp->content = &newToken ;
-    temp->right = BuildSequence( tokens ) ;
-
-    return temp ;
-  } // BuildSequence()
-
   // void CreateNewRightNode( Node* &root, bool &goRight ) {
   //   goRight = false ;
   //   root->right = CreateANewNode() ;
@@ -735,31 +720,37 @@ private:
   //   // BuildTree( root->right, goRight ) ;
   // } // CreateNewRightNode()
 
+  // Move current pointer to left node and save token in it 
   void SaveToLeftNode( Node* &temp ) {
       temp->left = CreateANewNode() ;
       temp = temp->left ;
       temp->content = CopyCurToken() ;
-  } // CreateNewLeftNode()
+  } // SaveToLeftNode()
 
+  // pop out the first token in token list
   Token GetNextToken() {
     mCurToken_ = mTokensList_->front() ; // Get first token
     mTokensList_->erase( mTokensList_->begin() ) ;
     return mCurToken_ ;
   } // GetNextToken()
 
+  // Peek next token in token list
   Token PeekNextToken() {
     return mTokensList_->front() ; // Get first token ;
   } // PeekNextToken()
 
+  // Copy current token to a new Token
   Token* CopyCurToken() {
     Token* newToken = new Token( mCurToken_ ) ;
     return newToken ;
   } // CopyCurToken()
 
+  // Build the cons structure
   Node* BuildCons() {
     
     mCurSubroutine_++ ;
-
+    cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
+    
     Node* root = CreateANewNode() ;
     Node* temp = root ;
 
@@ -819,7 +810,14 @@ private:
 
   } // BuildCons()
 
-  // Print string to consol
+  // As the input is not a cons structure 
+  Node* BuildOnlyOneNode() {
+    Node *root = CreateANewNode() ;
+    root->content = CopyCurToken() ;
+    return root ;
+  } // BuildOnlyOneNode()
+
+  // Print String to consol
   void PrintString( const Token* strToken ) {
 
     const string STR = strToken->value ;
@@ -859,6 +857,7 @@ private:
     cout << endl ;
   } // PrintString()
 
+  // Print Float to consol
   void PrintFloat( const Token* pointToken ) {
     
     string buffer = pointToken->value ;
@@ -878,6 +877,7 @@ private:
 
   } // PrintFloat()
 
+  // Print Int to consol
   void PrintInt( const Token* strToken ) {
     const string INTEGER = strToken->value ;
     int startingPos = 0 ;
@@ -896,11 +896,65 @@ private:
     mTokensList_ = tokenList ;
   } // SetTokenList()
 
-  void PrintSpacese() {
-    for ( int i = 0 ; i < mCurSubroutine_ ; i++ ) {
-      cout << "  " ;
-    } // for
-  } // PrintSpace()
+  // Check whether the DS is ( 1 . 2 ) format
+  bool IsParedCons( Node *head ) {
+    if ( head->content != NULL ) return false ;
+    else if ( head->left == NULL || head->right == NULL ) return false ;
+    else if ( head->right->right != NULL || head->right->left != NULL ) return false ;
+    return true ;
+  } // IsParedCons()
+
+  // Check whether the DS is a cons
+  bool IsCons( Node *head ) {
+    if ( head->left != NULL ) return true ;
+    return false ;
+  } // IsCons()
+
+  void PrintDotParen( Node* head ) {
+    
+    Node *temp = head ;
+    temp->visited = true ;
+
+    // print all of left node
+    while ( temp->left != NULL ) {
+      temp = temp->left ;
+      if ( temp->content != NULL ) {
+        PrintSpaceseLeftBracket() ;
+        PrintNodeToken( temp ) ;
+      } // if
+    } // while
+
+    // Dot
+    PrintSpaceseLeftBracket() ;
+    cout << "." << endl ;
+
+    // print right node
+    temp = head->right ;
+    PrintSpaceseLeftBracket() ;
+    if ( temp->content != NULL ) PrintNodeToken( temp ) ;
+
+  } // PrintDotParen()
+
+  string CombineLeftBracket() {
+    string buffer ;
+    while ( mPrintLeftBracketCount_ > 0 ) {
+      buffer += "( " ; 
+      mPrintLeftBracketCount_-- ;
+    } // while
+
+    return buffer ;
+  } // CombineLeftBracket()
+
+  void PrintSpaceseLeftBracket() {
+    // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
+    if ( mPrintLeftBracketCount_ != 0 ) {
+      cout << right << setw(mCurSubroutine_*2) << CombineLeftBracket() ;
+    } // if
+    else {
+      cout << right << setw(mCurSubroutine_*2) << " " ;
+    } // else
+
+  } // PrintSpaceseLeftBracket()
 
   void PrintNodeToken( Node *temp ) {
     if ( temp->content->type == STRING ) PrintString( temp->content ) ;
@@ -917,58 +971,77 @@ public:
     mCurSubroutine_ = 0 ;
   } // Tree()
 
-  void PrintNodes( Node *head ) {
-
-    Node *temp = head ;
-    
-    while ( temp != NULL ) {
-      if ( temp->content->type == STRING ) PrintString( temp->content ) ;
-      else if ( temp->content->type == FLOAT ) PrintFloat( temp->content ) ;
-      else if ( temp->content->type == INT ) PrintInt( temp->content ) ;
-      else cout << temp->content->value << endl ;
-      temp = temp->right ;
-    } // while
-
-  } // PrintNodes()
-
   void PrettyPrintNodes( Node *head ) {
     
-
     Node *temp = head ;
-    cout << "[" << temp->subroutineNum << "]" ; // DEBUG
-    cout << "[" << mCurSubroutine_ << "]" ; // DEBUG
     
-    if ( temp->subroutineNum > mCurSubroutine_ ) { 
-      cout << "(" ;
-      mCurSubroutine_ = temp->subroutineNum ;
+    // Initialization Step
+    if ( mCurSubroutine_ == 0 && !( temp->visited ) ) {
+      if ( !IsCons( temp ) ) {
+        PrintNodeToken( temp ) ;
+        return ;
+      } // Not a Cons 
+      else {
+        mPrintLeftBracketCount_++ ;
+        mCurSubroutine_ = 1 ;
+      } // else
     } // if
 
+    // Begin to Print Cons
+    if ( IsParedCons( temp ) ) {
+      PrintDotParen( temp ) ;
+      mCurSubroutine_-- ;
+      
+      PrintSpaceseLeftBracket() ;
+      cout << ")" << endl ;
+      return ;
+    } // if
+    else if ( temp->content == NULL && !( temp->visited ) ) {
+      
+      mPrintLeftBracketCount_++ ;
+      temp->visited = true ;
+      mCurSubroutine_++ ;
+    } // else if
+
+    // Print Out token in current token
     if ( temp->content != NULL ) {
-      PrintSpacese() ;
+      PrintSpaceseLeftBracket() ;
       PrintNodeToken( temp ) ;
     } // if
 
+    // Go Left
     if ( temp->left != NULL ) {
       PrettyPrintNodes( temp->left ) ;
     } // if
 
+    // Go Right
     if ( temp->right != NULL ) {
       PrettyPrintNodes( temp->right ) ;
-    } // eif
+    } // if
 
-    mCurSubroutine_-- ;
+    // End Up
+    if ( temp->right == NULL && temp->left == NULL ) {
+      mCurSubroutine_-- ;
+      PrintSpaceseLeftBracket() ;
+      cout << ")" << endl ;
+    } // if
 
   } // PrettyPrintNodes()
 
   // Create A New Tree For Current Token List
   void CreatANewTree( vector<Token>* tokenList ) {
 
-    // push tokenList in 
-    SetTokenList( tokenList ) ;
+    // Initialize 
+    SetTokenList( tokenList ) ; // push tokenList in 
+    mCurSubroutine_ = 0 ;
+    mPrintLeftBracketCount_ = 0 ;
 
-    GetNextToken() ;
     Node* TreeRoot = NULL ;
-    TreeRoot = BuildCons() ;
+    GetNextToken() ;
+
+    if ( tokenList->empty() ) TreeRoot = BuildOnlyOneNode() ;
+    else TreeRoot = BuildCons() ;
+
     mRoots_->push_back( TreeRoot ) ;
     mCurSubroutine_ = 0 ;
   } // CreatANewTree()
