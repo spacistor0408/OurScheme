@@ -50,6 +50,7 @@ struct Node {
   Node *right ;
   int subroutineNum ;
   bool visited ;
+  bool isCons ;
 } ;
 
 int g_uTestNum ;
@@ -687,14 +688,227 @@ public:
   bool IsExit( const Node *temp ) {
 
     if ( temp == NULL || temp->content == NULL ) return false ;
+    else if ( ! ( temp->isCons ) ) return false ;
     else if ( temp->content->value != "exit" ) return false ;
-    
     return true ;
 
   } // IsExit()
 
 } ; // Evaluator
 
+class Printer {
+  
+private: 
+
+  int mCurSubroutine_ ;
+  int mPrintLeftBracketCount_ ;
+
+  // Print String to consol
+  void PrintString( const Token* strToken ) {
+
+    const string STR = strToken->value ;
+    const int SIZE = STR.size() ;
+
+    for ( int i = 0 ; i < SIZE ; i++ ) {
+      char curChar = STR[i] ;
+
+      if ( curChar == '\\' && ( i+1 ) < SIZE ) {
+        char newChar = STR[++i] ;
+
+        if ( newChar == 'n' ) {
+          cout << "\n" ;
+        } // if \n
+        
+        else if ( newChar == 't' ) {
+          cout << "\t" ;
+        } // else if \t
+        
+        else if ( newChar == '\"' ) {
+          cout << "\"" ;
+        } // else if \"
+
+        else if ( newChar == '\\' ) {
+          cout << "\\" ;
+        } // else if \"
+
+        else {
+          cout << curChar << STR[i] ;
+        } // else
+      } // if
+      else {
+        cout << curChar ;
+      } // else
+    } // for
+
+    cout << endl ;
+  } // PrintString()
+
+  // Print Float to consol
+  void PrintFloat( const Token* pointToken ) {
+    
+    string buffer = pointToken->value ;
+
+    // Sign bit
+    if ( buffer[0] == '+' ) {
+      buffer.erase( buffer.begin() ) ;
+    } // if
+    else if ( buffer[0] == '-' ) {
+      cout << '-' ;
+      buffer.erase( buffer.begin() ) ;
+    } // else if
+
+    cout << fixed << setprecision( 3 )
+         << round( atof( buffer.c_str() )*1000 )/1000
+         << endl ;
+
+  } // PrintFloat()
+
+  // Print Int to consol
+  void PrintInt( const Token* strToken ) {
+    const string INTEGER = strToken->value ;
+    int startingPos = 0 ;
+
+    if ( INTEGER[startingPos] == '+' ) startingPos++ ;
+
+    for ( int i = startingPos ; i < INTEGER.size() ; i++ ) {
+      cout << INTEGER[i] ;
+    } // for
+
+    cout << endl ;
+
+  } // PrintInt()
+
+  // Check whether the DS is ( 1 . 2 ) format
+  bool IsParedCons( Node *head ) {
+    if ( head->content != NULL ) return false ;
+    else if ( head->left == NULL || head->right == NULL ) return false ;
+    else if ( head->right->right != NULL || head->right->left != NULL ) return false ;
+    return true ;
+  } // IsParedCons()
+
+  // Check whether the DS is a cons
+  bool IsCons( Node *head ) {
+    if ( head->left != NULL ) return true ;
+    return false ;
+  } // IsCons()
+
+  void PrintDotParen( Node* head ) {
+    
+    Node *temp = head ;
+    temp->visited = true ;
+
+    // print all of left node
+    while ( temp->left != NULL ) {
+      temp = temp->left ;
+      if ( temp->content != NULL ) {
+        PrintSpaceseLeftBracket() ;
+        PrintNodeToken( temp ) ;
+      } // if
+    } // while
+
+    // Dot
+    PrintSpaceseLeftBracket() ;
+    cout << "." << endl ;
+
+    // print right node
+    temp = head->right ;
+    PrintSpaceseLeftBracket() ;
+    if ( temp->content != NULL ) PrintNodeToken( temp ) ;
+
+  } // PrintDotParen()
+
+  string CombineLeftBracket() {
+    string buffer ;
+    while ( mPrintLeftBracketCount_ > 0 ) {
+      buffer += "( " ; 
+      mPrintLeftBracketCount_-- ;
+    } // while
+
+    return buffer ;
+  } // CombineLeftBracket()
+
+  void PrintSpaceseLeftBracket() {
+    // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
+    if ( mPrintLeftBracketCount_ != 0 ) {
+      cout << right << setw( mCurSubroutine_*2 ) << CombineLeftBracket() ;
+    } // if
+    else {
+      cout << right << setw( mCurSubroutine_*2 ) << " " ;
+    } // else
+
+  } // PrintSpaceseLeftBracket()
+
+  void PrintNodeToken( Node *temp ) {
+    if ( temp->content->type == STRING ) PrintString( temp->content ) ;
+    else if ( temp->content->type == FLOAT ) PrintFloat( temp->content ) ;
+    else if ( temp->content->type == INT ) PrintInt( temp->content ) ;
+    else cout << temp->content->value << endl ;
+  } // PrintNodeToken()
+
+public:
+  
+  void PrettyPrintNodes( Node *head ) {
+    
+    Node *temp = head ;
+    
+    // Initialization Step
+    if ( mCurSubroutine_ == 0 && ! ( temp->visited ) ) {
+      if ( !IsCons( temp ) ) {
+        PrintNodeToken( temp ) ;
+        return ;
+      } // if: Not a Cons 
+      else {
+        mPrintLeftBracketCount_++ ;
+        mCurSubroutine_ = 1 ;
+      } // else
+    } // if
+
+    // Begin to Print Cons
+    if ( IsParedCons( temp ) ) {
+      PrintDotParen( temp ) ;
+      mCurSubroutine_-- ;
+      
+      PrintSpaceseLeftBracket() ;
+      cout << ")" << endl ;
+      return ;
+    } // if
+    else if ( temp->content == NULL && ! ( temp->visited ) ) {
+      
+      mPrintLeftBracketCount_++ ;
+      temp->visited = true ;
+      mCurSubroutine_++ ;
+    } // else if
+
+    // Print Out token in current token
+    if ( temp->content != NULL ) {
+      PrintSpaceseLeftBracket() ;
+      PrintNodeToken( temp ) ;
+    } // if
+
+    // Go Left
+    if ( temp->left != NULL ) {
+      PrettyPrintNodes( temp->left ) ;
+    } // if
+
+    // Go Right
+    if ( temp->right != NULL ) {
+      PrettyPrintNodes( temp->right ) ;
+    } // if
+
+    // End Up
+    if ( temp->right == NULL && temp->left == NULL ) {
+      mCurSubroutine_-- ;
+      PrintSpaceseLeftBracket() ;
+      cout << ")" << endl ;
+    } // if
+
+  } // PrettyPrintNodes()
+
+  void Print() {
+    mPrintLeftBracketCount_ = 0 ;
+  } // Print()
+
+} ; // Printer
 
 // ---------------------------Tree Data Structure------------------------ //
 
@@ -707,7 +921,7 @@ private:
 
   Token mCurToken_ ;
   int mCurSubroutine_ ;
-  int mPrintLeftBracketCount_ ;
+  
 
   // create and initialize new Atom
   Node* CreateANewNode() {
@@ -718,10 +932,12 @@ private:
     oneNode->content = NULL ;
     oneNode->subroutineNum = mCurSubroutine_ ;
     oneNode->visited = false ;
+    oneNode->isCons = true ;
 
     return oneNode ;
   } // CreateANewNode()
 
+  // Check whether Token is atom 
   bool IsAtom( Token token ) {
     TokenType type = token.type ;
     return ( type != LEFT_PAREN &&
@@ -729,6 +945,11 @@ private:
              type != DOT &&
              type != QUOTE ) ;
   } // IsAtom()
+
+  // Push token vector to queue
+  void SetTokenList( vector<Token>* tokenList ) {
+    mTokensQueue_ = tokenList ;
+  } // SetTokenList()
 
   // pop out the first token in token list
   Token GetNextToken() {
@@ -827,155 +1048,9 @@ private:
   Node* BuildOnlyOneNode() {
     Node *root = CreateANewNode() ;
     root->content = CopyCurToken() ;
+    root->isCons = false ;
     return root ;
   } // BuildOnlyOneNode()
-
-  // Print String to consol
-  void PrintString( const Token* strToken ) {
-
-    const string STR = strToken->value ;
-    const int SIZE = STR.size() ;
-
-    for ( int i = 0 ; i < SIZE ; i++ ) {
-      char curChar = STR[i] ;
-
-      if ( curChar == '\\' && ( i+1 ) < SIZE ) {
-        char newChar = STR[++i] ;
-
-        if ( newChar == 'n' ) {
-          cout << "\n" ;
-        } // if \n
-        
-        else if ( newChar == 't' ) {
-          cout << "\t" ;
-        } // else if \t
-        
-        else if ( newChar == '\"' ) {
-          cout << "\"" ;
-        } // else if \"
-
-        else if ( newChar == '\\' ) {
-          cout << "\\" ;
-        } // else if \"
-
-        else {
-          cout << curChar << STR[i] ;
-        } // else
-      } // if
-      else {
-        cout << curChar ;
-      } // else
-    } // for
-
-    cout << endl ;
-  } // PrintString()
-
-  // Print Float to consol
-  void PrintFloat( const Token* pointToken ) {
-    
-    string buffer = pointToken->value ;
-
-    // Sign bit
-    if ( buffer[0] == '+' ) {
-      buffer.erase( buffer.begin() ) ;
-    } // if
-    else if ( buffer[0] == '-' ) {
-      cout << '-' ;
-      buffer.erase( buffer.begin() ) ;
-    } // else if
-
-    cout << fixed << setprecision( 3 )
-         << round( atof( buffer.c_str() )*1000 )/1000
-         << endl ;
-
-  } // PrintFloat()
-
-  // Print Int to consol
-  void PrintInt( const Token* strToken ) {
-    const string INTEGER = strToken->value ;
-    int startingPos = 0 ;
-
-    if ( INTEGER[startingPos] == '+' ) startingPos++ ;
-
-    for ( int i = startingPos ; i < INTEGER.size() ; i++ ) {
-      cout << INTEGER[i] ;
-    } // for
-
-    cout << endl ;
-
-  } // PrintInt()
-
-  // Push token vector to queue
-  void SetTokenList( vector<Token>* tokenList ) {
-    mTokensQueue_ = tokenList ;
-  } // SetTokenList()
-
-  // Check whether the DS is ( 1 . 2 ) format
-  bool IsParedCons( Node *head ) {
-    if ( head->content != NULL ) return false ;
-    else if ( head->left == NULL || head->right == NULL ) return false ;
-    else if ( head->right->right != NULL || head->right->left != NULL ) return false ;
-    return true ;
-  } // IsParedCons()
-
-  // Check whether the DS is a cons
-  bool IsCons( Node *head ) {
-    if ( head->left != NULL ) return true ;
-    return false ;
-  } // IsCons()
-
-  void PrintDotParen( Node* head ) {
-    
-    Node *temp = head ;
-    temp->visited = true ;
-
-    // print all of left node
-    while ( temp->left != NULL ) {
-      temp = temp->left ;
-      if ( temp->content != NULL ) {
-        PrintSpaceseLeftBracket() ;
-        PrintNodeToken( temp ) ;
-      } // if
-    } // while
-
-    // Dot
-    PrintSpaceseLeftBracket() ;
-    cout << "." << endl ;
-
-    // print right node
-    temp = head->right ;
-    PrintSpaceseLeftBracket() ;
-    if ( temp->content != NULL ) PrintNodeToken( temp ) ;
-
-  } // PrintDotParen()
-
-  string CombineLeftBracket() {
-    string buffer ;
-    while ( mPrintLeftBracketCount_ > 0 ) {
-      buffer += "( " ; 
-      mPrintLeftBracketCount_-- ;
-    } // while
-
-    return buffer ;
-  } // CombineLeftBracket()
-
-  void PrintSpaceseLeftBracket() {
-    // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
-    if ( mPrintLeftBracketCount_ != 0 ) {
-      cout << right << setw( mCurSubroutine_*2 ) << CombineLeftBracket() ;
-    } // if
-    else {
-      cout << right << setw( mCurSubroutine_*2 ) << " " ;
-    } // else
-
-  } // PrintSpaceseLeftBracket()
-
-  void PrintNodeToken( Node *temp ) {
-    if ( temp->content->type == STRING ) PrintString( temp->content ) ;
-    else if ( temp->content->type == FLOAT ) PrintFloat( temp->content ) ;
-    else if ( temp->content->type == INT ) PrintInt( temp->content ) ;
-    else cout << temp->content->value << endl ;
-  } // PrintNodeToken()
 
 public:
   
@@ -985,70 +1060,12 @@ public:
     mCurSubroutine_ = 0 ;
   } // Tree()
 
-  void PrettyPrintNodes( Node *head ) {
-    
-    Node *temp = head ;
-    
-    // Initialization Step
-    if ( mCurSubroutine_ == 0 && ! ( temp->visited ) ) {
-      if ( !IsCons( temp ) ) {
-        PrintNodeToken( temp ) ;
-        return ;
-      } // if: Not a Cons 
-      else {
-        mPrintLeftBracketCount_++ ;
-        mCurSubroutine_ = 1 ;
-      } // else
-    } // if
-
-    // Begin to Print Cons
-    if ( IsParedCons( temp ) ) {
-      PrintDotParen( temp ) ;
-      mCurSubroutine_-- ;
-      
-      PrintSpaceseLeftBracket() ;
-      cout << ")" << endl ;
-      return ;
-    } // if
-    else if ( temp->content == NULL && ! ( temp->visited ) ) {
-      
-      mPrintLeftBracketCount_++ ;
-      temp->visited = true ;
-      mCurSubroutine_++ ;
-    } // else if
-
-    // Print Out token in current token
-    if ( temp->content != NULL ) {
-      PrintSpaceseLeftBracket() ;
-      PrintNodeToken( temp ) ;
-    } // if
-
-    // Go Left
-    if ( temp->left != NULL ) {
-      PrettyPrintNodes( temp->left ) ;
-    } // if
-
-    // Go Right
-    if ( temp->right != NULL ) {
-      PrettyPrintNodes( temp->right ) ;
-    } // if
-
-    // End Up
-    if ( temp->right == NULL && temp->left == NULL ) {
-      mCurSubroutine_-- ;
-      PrintSpaceseLeftBracket() ;
-      cout << ")" << endl ;
-    } // if
-
-  } // PrettyPrintNodes()
-
   // Create A New Tree For Current Token List
   void CreatANewTree( vector<Token>* tokenList ) {
 
     // ----------Initialize---------- //
     SetTokenList( tokenList ) ; // push tokenList in 
     mCurSubroutine_ = 0 ;
-    mPrintLeftBracketCount_ = 0 ;
 
     Node* treeRoot = NULL ;
     GetNextToken() ;
@@ -1079,6 +1096,7 @@ private:
   SemanticsAnalyzer mSemanticsAnalyzer_ ;
   Tree mAtomTree_ ;
   Evaluator mEvaluator_ ;
+  Printer mPrinter_ ;
 
   vector<vector<Token>*> *mTokenTable_ ; // saving primitive tokens until building tree
   bool mQuit_ ;
@@ -1121,7 +1139,7 @@ public:
         ReadSExp() ;
         Node *curAtomRoot = mAtomTree_.GetCurrentRoot() ;
         if ( mEvaluator_.IsExit( curAtomRoot ) ) mQuit_ = true ;
-        else mAtomTree_.PrettyPrintNodes( curAtomRoot ) ; // Pretty print
+        else mPrinter_.PrettyPrintNodes( curAtomRoot ) ; // Pretty print
       } // try
       catch ( const Exception& e ) {
         
