@@ -1054,8 +1054,10 @@ public:
 
 } ; // Tree
 
-// OurSheme main system
-class OurSheme {
+// ---------------------------OurScheme Class------------------------------ //
+
+// OurScheme main system
+class OurScheme {
 
 private:
 
@@ -1088,7 +1090,7 @@ private:
 
 public:
 
-  OurSheme() {
+  OurScheme() {
     mTokenTable_ = new vector<vector<Token>*>() ;
     mQuit_ = false ;
   } // OurSheme()
@@ -1128,6 +1130,8 @@ public:
 
 } ; // OurSheme
 
+// ---------------------------Main Function------------------------------ //
+
 int main() {
 
   cin >> g_uTestNum ; // PL testNum
@@ -1136,7 +1140,7 @@ int main() {
 
   
 
-  OurSheme ourSheme = OurSheme() ;
+  OurScheme ourSheme = OurScheme() ;
   ourSheme.Run() ;
 
   return 0 ;
