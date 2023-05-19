@@ -531,6 +531,10 @@ public:
       mReader_.GetChar() ;
       peekChar = mReader_.PeekChar() ;
     } // while
+    
+    if ( peekChar == '\n' ) {
+      mReader_.GetChar() ;
+    } // if 
   } // ClearRestOfCharInThisLine()
 
 } ; // Lexer
@@ -788,8 +792,7 @@ private:
 
   // Check whether the DS is a cons
   bool IsCons( Node *head ) {
-    if ( head->left != NULL ) return true ;
-    return false ;
+    return ( head->isCons ) ;
   } // IsCons()
 
   void PrintDotParen( Node* head ) {
@@ -853,14 +856,8 @@ public:
     
     // Initialization Step
     if ( mCurSubroutine_ == 0 && ! ( temp->visited ) ) {
-      if ( !IsCons( temp ) ) {
-        PrintNodeToken( temp ) ;
-        return ;
-      } // if: Not a Cons 
-      else {
         mPrintLeftBracketCount_++ ;
         mCurSubroutine_ = 1 ;
-      } // else
     } // if
 
     // Begin to Print Cons
@@ -904,8 +901,12 @@ public:
 
   } // PrettyPrintNodes()
 
-  void Print() {
+  void PrettyPrint( Node *head ) {
     mPrintLeftBracketCount_ = 0 ;
+    mCurSubroutine_ = 0 ;
+
+    if ( ! head->isCons ) PrintNodeToken( head ) ;
+    else PrettyPrintNodes( head ) ;
   } // Print()
 
 } ; // Printer
@@ -922,7 +923,6 @@ private:
   Token mCurToken_ ;
   int mCurSubroutine_ ;
   
-
   // create and initialize new Atom
   Node* CreateANewNode() {
     Node *oneNode = new Node() ;
@@ -1074,7 +1074,6 @@ public:
     else treeRoot = BuildCons() ;
 
     mRoots_->push_back( treeRoot ) ;
-    mCurSubroutine_ = 0 ;
   } // CreatANewTree()
 
   // return current tree root
@@ -1139,15 +1138,13 @@ public:
         ReadSExp() ;
         Node *curAtomRoot = mAtomTree_.GetCurrentRoot() ;
         if ( mEvaluator_.IsExit( curAtomRoot ) ) mQuit_ = true ;
-        else mPrinter_.PrettyPrintNodes( curAtomRoot ) ; // Pretty print
+        else mPrinter_.PrettyPrint( curAtomRoot ) ; // Pretty print
       } // try
       catch ( const Exception& e ) {
         
         ErrorHadling::ErrorMessage( e.mErrorType_, e.mCurrentToken_ ) ;
         if ( e.mErrorType_ == NO_MORE_INPUT ) mQuit_ = true ;
         else mSyntaxAnalyzer_.ClearRestOfCharInThisLine() ;
-
-        // if ( g_uTestNum == 1 )  mQuit_ = true ; // debug
         
         gLineNum = 1 ;
         gColumn = 0 ; // while read the first char, col will add 1 automatically
@@ -1167,6 +1164,8 @@ public:
 int main() {
 
   cin >> g_uTestNum ; // PL testNum
+  cin.get() ;
+
   gLineNum = 1 ;
   gColumn = 0 ;
   
