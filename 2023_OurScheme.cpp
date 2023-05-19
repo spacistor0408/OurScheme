@@ -48,7 +48,7 @@ struct Node {
   Token *content ;
   Node *left ;
   Node *right ;
-  int subroutineNum = 0 ;
+  int subroutineNum ;
   bool visited ;
 } ;
 
@@ -149,6 +149,9 @@ public:
 
 } ; // ErrorHadling
 
+
+// ---------------------------Reader ------------------------------------ //
+
 class Reader {
 
 private:
@@ -202,6 +205,9 @@ public:
   } // GetColumn()
 
 } ; // Reader
+
+
+// ---------------------------Lexical Analyzation------------------------ //
 
 class Lexer {
 
@@ -528,6 +534,9 @@ public:
 
 } ; // Lexer
 
+
+// ---------------------------Syntax Analyzation------------------------- //
+
 class Parser {
 
 private:
@@ -648,9 +657,15 @@ public:
 
 } ; // Parser
 
+
+// ---------------------------Semantics Analyzation---------------------- //
+
 class SemanticsAnalyzer {
 
 } ; // SemanticsAnalyzer
+
+
+// ---------------------------Evaluator---------------------------------- //
 
 class Evaluator {
 
@@ -680,13 +695,15 @@ public:
 
 } ; // Evaluator
 
-// Data structure
+
+// ---------------------------Tree Data Structure------------------------ //
+
 class Tree {
 
 private:
   
   vector<Node*> *mRoots_ ;
-  vector<Token> *mTokensList_ ;
+  vector<Token> *mTokensQueue_ ;
 
   Token mCurToken_ ;
   int mCurSubroutine_ ;
@@ -705,43 +722,33 @@ private:
     return oneNode ;
   } // CreateANewNode()
 
-  bool IsAtom( Token* token ) {
-    TokenType type = token->type ;
+  bool IsAtom( Token token ) {
+    TokenType type = token.type ;
     return ( type != LEFT_PAREN &&
              type != RIGHT_PAREN && 
              type != DOT &&
              type != QUOTE ) ;
   } // IsAtom()
 
-  // void CreateNewRightNode( Node* &root, bool &goRight ) {
-  //   goRight = false ;
-  //   root->right = CreateANewNode() ;
-  //   root->right->prevNode = root ;
-  //   // BuildTree( root->right, goRight ) ;
-  // } // CreateNewRightNode()
-
-  // Move current pointer to left node and save token in it 
-  void SaveToLeftNode( Node* &temp ) {
-      temp->left = CreateANewNode() ;
-      temp = temp->left ;
-      temp->content = CopyCurToken() ;
-  } // SaveToLeftNode()
-
   // pop out the first token in token list
   Token GetNextToken() {
-    mCurToken_ = mTokensList_->front() ; // Get first token
-    mTokensList_->erase( mTokensList_->begin() ) ;
+    mCurToken_ = mTokensQueue_->front() ; // Get first token
+    mTokensQueue_->erase( mTokensQueue_->begin() ) ;
     return mCurToken_ ;
   } // GetNextToken()
 
   // Peek next token in token list
   Token PeekNextToken() {
-    return mTokensList_->front() ; // Get first token ;
+    return mTokensQueue_->front() ; // Get first token ;
   } // PeekNextToken()
 
   // Copy current token to a new Token
   Token* CopyCurToken() {
-    Token* newToken = new Token( mCurToken_ ) ;
+    Token* newToken = new Token() ;
+    newToken->column = mCurToken_.column ;
+    newToken->lineNum = mCurToken_.lineNum ;
+    newToken->type = mCurToken_.type ;
+    newToken->value = mCurToken_.value ;
     return newToken ;
   } // CopyCurToken()
 
@@ -749,7 +756,7 @@ private:
   Node* BuildCons() {
     
     mCurSubroutine_++ ;
-    cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
+    // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
     
     Node* root = CreateANewNode() ;
     Node* temp = root ;
@@ -758,20 +765,24 @@ private:
       
       GetNextToken() ;
 
-      while ( IsAtom( &mCurToken_ ) || mCurToken_.type == LEFT_PAREN ) {
-        if ( IsAtom( &mCurToken_ ) ) {
+      while ( IsAtom( mCurToken_ ) || mCurToken_.type == LEFT_PAREN ) {
+        if ( IsAtom( mCurToken_ ) ) {
           if ( temp->content == NULL && temp->left == NULL ) {
             temp->content = CopyCurToken() ; 
-          }
+          } // if
           else {
-            SaveToLeftNode( temp ) ;
-          }
-          cout << "Save Token: " << " (" << temp->subroutineNum << ") " << temp->content->value << endl ; // DEBUG
-        }
+            temp->left = CreateANewNode() ;
+            temp = temp->left ;
+            temp->content = CopyCurToken() ;
+          } // else
+          // cout << "Save Token: " << " (" << temp->subroutineNum << ") " 
+          //      << temp->content->value << endl ; // DEBUG
+        } // if
         else if ( mCurToken_.type == LEFT_PAREN ) {
           temp->left = BuildCons() ;
           while ( temp->left != NULL ) temp = temp->left ;
-        }
+        } // else if
+
         GetNextToken() ;
       } // while
 
@@ -789,11 +800,12 @@ private:
           temp->right = BuildCons() ;
           GetNextToken() ;
         } // if: New Cons
-        else if ( IsAtom( &mCurToken_ ) ) {
+        else if ( IsAtom( mCurToken_ ) ) {
           temp->right = CreateANewNode() ;
           temp = temp->right ;
           temp->content = CopyCurToken() ;
-          cout << "Save Token: " << " (" << temp->subroutineNum << ") " << temp->content->value << endl ; // DEBUG
+          // cout << "Save Token: " << " (" << temp->subroutineNum << ") " 
+          //      << temp->content->value << endl ; // DEBUG
           GetNextToken() ;
         } // else if
 
@@ -806,6 +818,7 @@ private:
       } // if
 
     } // if
+
     return root ;
 
   } // BuildCons()
@@ -892,8 +905,9 @@ private:
 
   } // PrintInt()
 
+  // Push token vector to queue
   void SetTokenList( vector<Token>* tokenList ) {
-    mTokensList_ = tokenList ;
+    mTokensQueue_ = tokenList ;
   } // SetTokenList()
 
   // Check whether the DS is ( 1 . 2 ) format
@@ -948,10 +962,10 @@ private:
   void PrintSpaceseLeftBracket() {
     // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
     if ( mPrintLeftBracketCount_ != 0 ) {
-      cout << right << setw(mCurSubroutine_*2) << CombineLeftBracket() ;
+      cout << right << setw( mCurSubroutine_*2 ) << CombineLeftBracket() ;
     } // if
     else {
-      cout << right << setw(mCurSubroutine_*2) << " " ;
+      cout << right << setw( mCurSubroutine_*2 ) << " " ;
     } // else
 
   } // PrintSpaceseLeftBracket()
@@ -967,7 +981,7 @@ public:
   
   Tree() {
     mRoots_ = new vector<Node*>() ;
-    mTokensList_ = new vector<Token>() ;
+    mTokensQueue_ = new vector<Token>() ;
     mCurSubroutine_ = 0 ;
   } // Tree()
 
@@ -976,11 +990,11 @@ public:
     Node *temp = head ;
     
     // Initialization Step
-    if ( mCurSubroutine_ == 0 && !( temp->visited ) ) {
+    if ( mCurSubroutine_ == 0 && ! ( temp->visited ) ) {
       if ( !IsCons( temp ) ) {
         PrintNodeToken( temp ) ;
         return ;
-      } // Not a Cons 
+      } // if: Not a Cons 
       else {
         mPrintLeftBracketCount_++ ;
         mCurSubroutine_ = 1 ;
@@ -996,7 +1010,7 @@ public:
       cout << ")" << endl ;
       return ;
     } // if
-    else if ( temp->content == NULL && !( temp->visited ) ) {
+    else if ( temp->content == NULL && ! ( temp->visited ) ) {
       
       mPrintLeftBracketCount_++ ;
       temp->visited = true ;
@@ -1031,18 +1045,18 @@ public:
   // Create A New Tree For Current Token List
   void CreatANewTree( vector<Token>* tokenList ) {
 
-    // Initialize 
+    // ----------Initialize---------- //
     SetTokenList( tokenList ) ; // push tokenList in 
     mCurSubroutine_ = 0 ;
     mPrintLeftBracketCount_ = 0 ;
 
-    Node* TreeRoot = NULL ;
+    Node* treeRoot = NULL ;
     GetNextToken() ;
 
-    if ( tokenList->empty() ) TreeRoot = BuildOnlyOneNode() ;
-    else TreeRoot = BuildCons() ;
+    if ( tokenList->empty() ) treeRoot = BuildOnlyOneNode() ;
+    else treeRoot = BuildCons() ;
 
-    mRoots_->push_back( TreeRoot ) ;
+    mRoots_->push_back( treeRoot ) ;
     mCurSubroutine_ = 0 ;
   } // CreatANewTree()
 
@@ -1054,7 +1068,7 @@ public:
 
 } ; // Tree
 
-// ---------------------------OurScheme Class------------------------------ //
+// ---------------------------OurScheme System--------------------------- //
 
 // OurScheme main system
 class OurScheme {
@@ -1093,7 +1107,7 @@ public:
   OurScheme() {
     mTokenTable_ = new vector<vector<Token>*>() ;
     mQuit_ = false ;
-  } // OurSheme()
+  } // OurScheme()
 
   void Run() {
 
@@ -1137,7 +1151,6 @@ int main() {
   cin >> g_uTestNum ; // PL testNum
   gLineNum = 1 ;
   gColumn = 0 ;
-
   
 
   OurScheme ourSheme = OurScheme() ;
