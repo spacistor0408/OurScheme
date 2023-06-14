@@ -706,6 +706,8 @@ private:
 
   int mCurSubroutine_ ;
   int mPrintLeftBracketCount_ ;
+  bool mIsPared_ ;
+  bool mIsConsNeedPrintRightBracket ;
 
   // Print String to consol
   void PrintString( const Token* strToken ) {
@@ -783,16 +785,21 @@ private:
   } // PrintInt()
 
   // Check whether the DS is ( 1 . 2 ) format
-  bool IsParedCons( Node *head ) {
-    if ( head->content != NULL ) return false ;
-    else if ( head->left == NULL || head->right == NULL ) return false ;
-    else if ( head->right->right != NULL || head->right->left != NULL ) return false ;
-    return true ;
-  } // IsParedCons()
+  // Paired only has on right node event thought is cons
+  bool IsPaired( Node *head ) {
+    return ( head->content == NULL && 
+             head->left != NULL    && 
+             head->right != NULL ) ;
+  } // IsPaired()
+
+  bool IsLastNode( Node *head ) {
+    return ( head->left == NULL && head->right == NULL ) ;
+  } // IsLastNode()
 
   // Check whether the DS is a cons
+  // Cons have one or more left nodes
   bool IsCons( Node *head ) {
-    return ( head->isCons ) ;
+    return ( head->left != NULL ) ;
   } // IsCons()
 
   void PrintDotParen( Node* head ) {
@@ -810,14 +817,21 @@ private:
     } // while
 
     // Dot
-    PrintSpaceseLeftBracket() ;
-    cout << "." << endl ;
+    if ( IsLastNode( head->right ) ) {
+      PrintSpaceseLeftBracket() ;
+      cout << "." << endl ;
+    } // if
 
     // print right node
     temp = head->right ;
     PrintSpaceseLeftBracket() ;
     if ( temp->content != NULL ) PrintNodeToken( temp ) ;
-
+    
+    if ( temp->left != NULL ) {
+      mPrintLeftBracketCount_++ ;
+      mCurSubroutine_++ ;
+      PrettyPrintNodes( temp->left ) ;
+    } // if
   } // PrintDotParen()
 
   string CombineLeftBracket() {
@@ -853,38 +867,50 @@ public:
   void PrettyPrintNodes( Node *head ) {
     
     Node *temp = head ;
+    bool isPared = false ;
     
     // Initialization Step
+    // If is start of cons, print a (
     if ( mCurSubroutine_ == 0 && ! ( temp->visited ) ) {
-        mPrintLeftBracketCount_++ ;
-        mCurSubroutine_ = 1 ;
+      mPrintLeftBracketCount_++ ;
+      mCurSubroutine_ = 1 ;
     } // if
 
     // Begin to Print Cons
-    if ( IsParedCons( temp ) ) {
-      PrintDotParen( temp ) ;
-      mCurSubroutine_-- ;
-      
-      PrintSpaceseLeftBracket() ;
-      cout << ")" << endl ;
-      return ;
-    } // if
-    else if ( temp->content == NULL && ! ( temp->visited ) ) {
-      
-      mPrintLeftBracketCount_++ ;
-      temp->visited = true ;
-      mCurSubroutine_++ ;
-    } // else if
+    if ( IsPaired( temp ) && ! ( temp->visited ) ) { // temp is a pared node
+      isPared = true ;
 
-    // Print Out token in current token
-    if ( temp->content != NULL ) {
+
+      if ( temp->right->left != NULL || temp->left->left != NULL ) {
+        mPrintLeftBracketCount_++ ;
+        temp->visited = true ;
+        mCurSubroutine_++ ;
+      } // if
+    } // if
+    else if ( temp->content != NULL ) {
       PrintSpaceseLeftBracket() ;
       PrintNodeToken( temp ) ;
-    } // if
+    } // else if
 
     // Go Left
     if ( temp->left != NULL ) {
       PrettyPrintNodes( temp->left ) ;
+    } // if
+
+    if ( isPared && temp->right ) {
+
+      isPared = false ;
+
+      if ( temp->right->left == NULL ) { // temp has only one right node and not a pared node
+        PrintSpaceseLeftBracket() ;
+        cout << "." << endl ;
+      } // if
+      else if ( temp->right->right != NULL ) { // temp's right node is  pared node
+        mCurSubroutine_-- ;
+        if ( mCurSubroutine_ != 0 ) PrintSpaceseLeftBracket() ;
+        cout << ")" << endl ;
+      } // else if
+
     } // if
 
     // Go Right
@@ -893,9 +919,9 @@ public:
     } // if
 
     // End Up
-    if ( temp->right == NULL && temp->left == NULL ) {
+    if ( temp->right == NULL && temp->left == NULL && ! isPared ) {
       mCurSubroutine_-- ;
-      PrintSpaceseLeftBracket() ;
+      if ( mCurSubroutine_ != 0 ) PrintSpaceseLeftBracket() ;
       cout << ")" << endl ;
     } // if
 
@@ -904,10 +930,19 @@ public:
   void PrettyPrint( Node *head ) {
     mPrintLeftBracketCount_ = 0 ;
     mCurSubroutine_ = 0 ;
+    mIsPared_ = false ;
+    mIsConsNeedPrintRightBracket = false ;
 
     if ( ! head->isCons ) PrintNodeToken( head ) ;
     else PrettyPrintNodes( head ) ;
-  } // Print()
+
+    while ( mCurSubroutine_ > 1 ) {
+      mCurSubroutine_-- ;
+      if ( mCurSubroutine_ != 0 ) PrintSpaceseLeftBracket() ;
+      cout << ")" << endl ;
+    } // while
+
+  } // PrettyPrint()
 
 } ; // Printer
 
@@ -1099,6 +1134,7 @@ private:
 
   vector<vector<Token>*> *mTokenTable_ ; // saving primitive tokens until building tree
   bool mQuit_ ;
+  bool mErrorQuit_ ;
 
   void PrintTokenList() {
     for ( int i = 0 ; i < mTokenTable_->size() ; i++ ) {
@@ -1124,13 +1160,14 @@ public:
   OurScheme() {
     mTokenTable_ = new vector<vector<Token>*>() ;
     mQuit_ = false ;
+    mErrorQuit_ = false ;
   } // OurScheme()
 
   void Run() {
 
     cout << "Welcome to OurScheme!" << endl << endl ;
     
-    while ( !mQuit_ ) {
+    while ( !mQuit_ && !mErrorQuit_ ) {
 
       cout << "> " ;
       
@@ -1143,14 +1180,14 @@ public:
       catch ( const Exception& e ) {
         
         ErrorHadling::ErrorMessage( e.mErrorType_, e.mCurrentToken_ ) ;
-        if ( e.mErrorType_ == NO_MORE_INPUT ) mQuit_ = true ;
+        if ( e.mErrorType_ == NO_MORE_INPUT ) mErrorQuit_ = true ;
         else mSyntaxAnalyzer_.ClearRestOfCharInThisLine() ;
         
         gLineNum = 1 ;
         gColumn = 0 ; // while read the first char, col will add 1 automatically
       } // catch
 
-      if ( !mQuit_ ) cout << endl ;
+      if ( !mErrorQuit_ ) cout << endl ;
     } // while
 
     cout << "Thanks for using OurScheme!" << endl << endl ;
