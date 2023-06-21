@@ -856,7 +856,6 @@ public:
     // Pared Case
     if ( IsPaired( cur ) ) {
       
-      
       bool onlyOneRightNode = false ;
       bool leftCons_RightPared = false ;
 
@@ -932,9 +931,14 @@ public:
   // used to debug
   void PrintConstruct( Node *head ) {
     Node *cur = head ;
-    if ( cur->content != NULL ) PrintNodeToken( cur ) ;
-    else cout << "_" << endl ;
-    
+    if ( cur == NULL ) return ;
+    if ( cur->content != NULL ) {
+      cout << cur->subroutineNum << " " ;
+      PrintNodeToken( cur ) ;
+    } // if
+    else cout << cur->subroutineNum << " _" << endl ;
+
+
     PrintConstruct( cur->left ) ;
     PrintConstruct( cur->right ) ;
 
@@ -1011,68 +1015,57 @@ private:
     return newToken ;
   } // CopyCurToken()
 
+  Node* SaveToken_with_NewNode() {
+    Node* temp = CreateANewNode() ;
+    temp->content = CopyCurToken() ;
+    cout << "Save Token: " << " (" << temp->subroutineNum << ") " 
+         << temp->content->value << endl ; // DEBUG 
+    return temp ;
+  } // SaveToken_with_NewNode()
+
   // Build the cons structure
   Node* BuildCons() {
     
     mCurSubroutine_++ ;
-    // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
     
     Node* root = CreateANewNode() ;
-    Node* temp = root ;
+    Node* cur = root ;
 
+    // buildind a sub tree
     if ( mCurToken_.type == LEFT_PAREN ) {
-      
       GetNextToken() ;
 
+      // case1: ( A B C ) save left atom to node
+      // case2: ( A ( B C ) D ) if meet the left bracket, create new node to connect it
       while ( IsAtom( mCurToken_ ) || mCurToken_.type == LEFT_PAREN ) {
-        if ( IsAtom( mCurToken_ ) ) {
-          if ( temp->content == NULL && temp->left == NULL ) {
-            temp->content = CopyCurToken() ; 
-          } // if
-          else {
-            temp->left = CreateANewNode() ;
-            temp = temp->left ;
-            temp->content = CopyCurToken() ;
-          } // else
-          // cout << "Save Token: " << " (" << temp->subroutineNum << ") " 
-          //      << temp->content->value << endl ; // DEBUG
-        } // if
-        else if ( mCurToken_.type == LEFT_PAREN ) {
-          temp->left = BuildCons() ;
-          while ( temp->left != NULL ) temp = temp->left ;
-        } // else if
 
+        // if is atom svae to left node
+        if ( IsAtom( mCurToken_ ) ) cur->left = SaveToken_with_NewNode() ;
+        else if ( mCurToken_.type == LEFT_PAREN ) cur->left = BuildCons() ;
+
+        // get the next token
         GetNextToken() ;
+
+        // if the got next token is a dot, cur can't move to right node
+        // cause the right node need to check 
+        if ( mCurToken_.type != DOT ) {  
+          cur->right = CreateANewNode() ;
+          cur = cur->right ;
+        } // if
+        
       } // while
 
-      while ( root->content == NULL && root->left != NULL && root->right == NULL ) {
-        root = root->left ;
-      } // while: clear empty node
-
       if ( mCurToken_.type == DOT ) {
-        temp = CreateANewNode() ;
-        temp->left = root ;
-        root = temp ;
         GetNextToken() ;
 
-        if ( mCurToken_.type == LEFT_PAREN ) {
-          temp->right = BuildCons() ;
-          GetNextToken() ;
-        } // if: New Cons
-        else if ( IsAtom( mCurToken_ ) ) {
-          temp->right = CreateANewNode() ;
-          temp = temp->right ;
-          temp->content = CopyCurToken() ;
-          // cout << "Save Token: " << " (" << temp->subroutineNum << ") " 
-          //      << temp->content->value << endl ; // DEBUG
-          GetNextToken() ;
-        } // else if
+        if ( IsAtom( mCurToken_ ) ) cur->right = SaveToken_with_NewNode() ;
+        else if ( mCurToken_.type == LEFT_PAREN ) cur->right = BuildCons() ;
+        GetNextToken() ;
 
       } // if: Dot
 
       if ( mCurToken_.type == RIGHT_PAREN ) {
         mCurSubroutine_-- ;
-        // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
         return root ;
       } // if
 
@@ -1101,16 +1094,19 @@ public:
   // Create A New Tree For Current Token List
   void CreatANewTree( vector<Token>* tokenList ) {
 
-    // ----------Initialize---------- //
+    // ---------- Initialize ---------- //
     SetTokenList( tokenList ) ; // push tokenList in 
     mCurSubroutine_ = 0 ;
 
-    Node* treeRoot = NULL ;
+    // null node in root
+    Node* treeRoot = CreateANewNode() ;
     GetNextToken() ;
 
+    // ---------- Building A Tree ---------- //
     if ( tokenList->empty() ) treeRoot = BuildOnlyOneNode() ;
     else treeRoot = BuildCons() ;
 
+    // ---------- Finish ---------- //
     mRoots_->push_back( treeRoot ) ;
   } // CreatANewTree()
 
@@ -1179,7 +1175,7 @@ public:
         ReadSExp() ;
         Node *curAtomRoot = mAtomTree_.GetCurrentRoot() ;
         if ( mEvaluator_.IsExit( curAtomRoot ) ) mQuit_ = true ;
-        else mPrinter_.PrettyPrint( curAtomRoot ) ; // Pretty print
+        else mPrinter_.PrintConstruct( curAtomRoot ) ; // Pretty print
       } // try
       catch ( const Exception& e ) {
         
@@ -1199,6 +1195,9 @@ public:
   } // Run()
 
 } ; // OurSheme
+
+
+
 
 // ---------------------------Main Function------------------------------ //
 
