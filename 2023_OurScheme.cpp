@@ -49,7 +49,6 @@ struct Node {
   Node *left ;
   Node *right ;
   int subroutineNum ;
-  bool visited ;
   bool isCons ;
 } ;
 
@@ -691,9 +690,10 @@ public:
 
   bool IsExit( const Node *temp ) {
 
-    if ( temp == NULL || temp->content == NULL ) return false ;
-    else if ( ! ( temp->isCons ) ) return false ;
-    else if ( temp->content->value != "exit" ) return false ;
+    if ( temp == NULL ) return false ;
+    else if ( temp->left == NULL || temp->right != NULL ) return false ;
+    else if ( temp->left->content == NULL ) return false ;
+    else if ( temp->left->content->value != "exit" ) return false ;
     return true ;
 
   } // IsExit()
@@ -706,8 +706,6 @@ private:
 
   int mCurSubroutine_ ;
   int mPrintLeftBracketCount_ ;
-  bool mIsPared_ ;
-  bool mIsConsNeedPrintRightBracket ;
 
   // Print String to consol
   void PrintString( const Token* strToken ) {
@@ -787,16 +785,16 @@ private:
   // Check whether the DS is ( 1 . 2 ) format
   // Paired only has on right node event thought is cons
   bool IsPaired( Node *head ) {
-    return ( head->content == NULL && 
-             head->left != NULL    && 
-             head->right != NULL ) ;
+    return ( head->content        == NULL && 
+             head->left           != NULL && 
+             head->right          != NULL && 
+             head->left->content  != NULL && 
+             head->right->content != NULL &&
+             head->right->content->type != NIL ) ;
   } // IsPaired()
 
   // Check whether the DS is a cons
   // Cons have one or more left nodes
-  bool IsCons( Node *head ) {
-    return ( head->left != NULL ) ;
-  } // IsCons()
 
   bool IsBoolean( Node *head ) {
     return ( head->content->type == NIL || head->content->type == T ) ;
@@ -812,7 +810,7 @@ private:
     return buffer ;
   } // CombineLeftBracket()
 
-  void PrintSpaceseLeftBracket() {
+  void SetFormat() {
     // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
     if ( mPrintLeftBracketCount_ > 0 ) {
       cout << right << setw( mCurSubroutine_*2 ) << CombineLeftBracket() ;
@@ -821,7 +819,7 @@ private:
       cout << right << setw( mCurSubroutine_*2 ) << " " ;
     } // else
 
-  } // PrintSpaceseLeftBracket()
+  } // SetFormat()
 
   void PrintRightBracket() {
     if ( mCurSubroutine_ > 0 ) cout << right << setw( mCurSubroutine_*2 ) << " " ;
@@ -842,102 +840,72 @@ private:
     if ( temp->content->type == STRING ) PrintString( temp->content ) ;
     else if ( temp->content->type == FLOAT ) PrintFloat( temp->content ) ;
     else if ( temp->content->type == INT ) PrintInt( temp->content ) ;
-    else if ( temp->content->type == NIL && mCurSubroutine_ > 0 ) return ;
+    // else if ( temp->content->type == NIL && mCurSubroutine_ > 0 ) cout << "nil" ;
     else cout << temp->content->value << endl ;
   } // PrintNodeToken()
 
-public:
-  
-  void PrettyPrintNodes( Node *head ) {
+  // Traversal and print all node
+  void TraversalTree( Node *head, bool isCons ) {
     
     Node *cur = head ;
-    bool isPared = false ;
 
-    // Pared Case
-    if ( IsPaired( cur ) ) {
-      
-      bool onlyOneRightNode = false ;
-      bool leftCons_RightPared = false ;
-
-      // check whether pared node's right has only one node ( A . B )
-      if ( cur->right->left == NULL ) onlyOneRightNode = true ;
-
-      // if ( ( A B ) . ( C . D ) )
-      if ( cur->left->content  != NULL &&
-           cur->left->left     != NULL &&
-           cur->right->content == NULL ) leftCons_RightPared = true ;
-
-      // if right node is pared ( A . ( B . C ) )
-      if ( cur->right->content == NULL ) cur->right->visited = true ;
+    // terminal node
+    if ( cur == NULL ) return ;
+    
+    // ---------- case1: empty null ---------- //
+    if ( cur->content == NULL ) {
 
       // ---------- start print node ---------- //
-      if ( ! cur->visited ) ConsBegin() ;
+      if ( isCons ) ConsBegin() ;
       // ---------- go left node ---------- //
-      /* 
-      if left node is cons and right node is pared, 
-      in order to separate left node and right's pared's left node,
-      we need to add bracket
-      */
-      if ( leftCons_RightPared ) {
-        
-        ConsBegin() ;
-        PrettyPrintNodes( cur->left ) ;
-        ConsEnd() ;
-        
-      } // if
-      else PrettyPrintNodes( cur->left ) ;
+      TraversalTree( cur->left, true ) ;
 
-
-      // if only one right node such as ( A . B ) print dot
-      if ( onlyOneRightNode && !IsBoolean( cur->right ) ) {
-        PrintSpaceseLeftBracket() ;
+      // if is paired ( A . B )
+      if ( IsPaired( cur ) ) {
+        SetFormat() ;
         cout << "." << endl ;
       } // if
 
       // ---------- go right node ---------- //
-      PrettyPrintNodes( cur->right ) ;
+      TraversalTree( cur->right, false ) ;
+      if ( isCons ) ConsEnd() ;
 
-      if ( ! cur->visited ) ConsEnd() ;
-
-    } // if: Pared
-    // Cons Case
-    else if ( cur->content != NULL ) {
-
-      PrintSpaceseLeftBracket() ;
+    } // if
+    // ---------- case2: right node is nil ---------- //
+    else if ( cur->content->type == NIL && !isCons ) {
+      return ;
+    } // else if
+    // ---------- case3: atom ---------- //
+    else {
+      SetFormat() ;
       PrintNodeToken( cur ) ;
-
-      // ---------- go left node ---------- //
-      if ( cur->left != NULL ) PrettyPrintNodes( cur->left ) ;
-
     } // else if
 
-  } // PrettyPrintNodes()
+  } // TraversalTree()
+
+public:
 
   void PrettyPrint( Node *head ) {
     mPrintLeftBracketCount_ = 0 ;
     mCurSubroutine_ = 0 ;
-    mIsPared_ = false ;
-    mIsConsNeedPrintRightBracket = false ;
 
-    if ( ! head->isCons ) PrintNodeToken( head ) ;
-    else {
-      if ( head->content != NULL ) ConsBegin() ; // if root not a pared
-      PrettyPrintNodes( head ) ;
-      if ( mCurSubroutine_ > 0 ) ConsEnd() ;
-    } // else: Print a tree
+    TraversalTree( head, true ) ;
 
   } // PrettyPrint()
 
   // used to debug
   void PrintConstruct( Node *head ) {
     Node *cur = head ;
-    if ( cur == NULL ) return ;
+    if ( cur == NULL ) {
+      cout << "null" << endl ;
+      return ;
+    } // if
+
     if ( cur->content != NULL ) {
-      cout << cur->subroutineNum << " " ;
+      cout << "  " ;
       PrintNodeToken( cur ) ;
     } // if
-    else cout << cur->subroutineNum << " _" << endl ;
-
+    else cout << " _" << endl ;
 
     PrintConstruct( cur->left ) ;
     PrintConstruct( cur->right ) ;
@@ -973,7 +941,6 @@ private:
     oneNode->right = NULL ;
     oneNode->content = NULL ;
     oneNode->subroutineNum = mCurSubroutine_ ;
-    oneNode->visited = false ;
     oneNode->isCons = true ;
 
     return oneNode ;
@@ -1018,8 +985,8 @@ private:
   Node* SaveToken_with_NewNode() {
     Node* temp = CreateANewNode() ;
     temp->content = CopyCurToken() ;
-    cout << "Save Token: " << " (" << temp->subroutineNum << ") " 
-         << temp->content->value << endl ; // DEBUG 
+    // cout << "Save Token: " << " (" << temp->subroutineNum << ") " 
+    //      << temp->content->value << endl ; // DEBUG 
     return temp ;
   } // SaveToken_with_NewNode()
 
@@ -1046,15 +1013,16 @@ private:
         // get the next token
         GetNextToken() ;
 
-        // if the got next token is a dot, cur can't move to right node
+        // if the got next token is a dot or ), cur can't move to and create right node
         // cause the right node need to check 
-        if ( mCurToken_.type != DOT ) {  
+        if ( mCurToken_.type != DOT && mCurToken_.type != RIGHT_PAREN ) {  
           cur->right = CreateANewNode() ;
           cur = cur->right ;
         } // if
         
       } // while
 
+      // case3: ( A . B )
       if ( mCurToken_.type == DOT ) {
         GetNextToken() ;
 
@@ -1175,7 +1143,7 @@ public:
         ReadSExp() ;
         Node *curAtomRoot = mAtomTree_.GetCurrentRoot() ;
         if ( mEvaluator_.IsExit( curAtomRoot ) ) mQuit_ = true ;
-        else mPrinter_.PrintConstruct( curAtomRoot ) ; // Pretty print
+        else mPrinter_.PrettyPrint( curAtomRoot ) ; // Pretty print
       } // try
       catch ( const Exception& e ) {
         
