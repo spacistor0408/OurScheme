@@ -27,6 +27,7 @@ enum ErrorType {
   NO_CLOSING_QUOTE,
   UNRECOGNIZED_TOKEN,
   UNEXPECTED_TOKEN,
+  UNEXPECTED_RIGHTBRACKET_TOKEN,
   UNDEFINEDID,
   DIVID_ZERO
 } ;
@@ -50,6 +51,7 @@ struct Node {
   Node *right ;
   int subroutineNum ;
   bool isCons ;
+  int quoteCount ;
 } ;
 
 int g_uTestNum ;
@@ -128,6 +130,13 @@ private:
          << " is >>" << token << "<<\n" ;
   } // UNEXPECTED_TOKEN_ERROR()
 
+  static void UNEXPECTED_RIGHTBRACKET_TOKEN_ERROR( string token ) {
+    cout << "ERROR (unexpected token) :" 
+         << " ')' expected when token at Line " << gLineNum
+         << " Column " << gColumn
+         << " is >>" << token << "<<\n" ;
+  } // UNEXPECTED_RIGHTBRACKET_TOKEN_ERROR()
+
   static void UNDEFINEDID_ERROR( string token ) {
     cout << "Undefined identifier :'" << token << "\n" ;
   } // UNDEFINEDID_ERROR()
@@ -143,6 +152,7 @@ public:
     else if ( type == NO_CLOSING_QUOTE ) NO_CLOSING_QOUTE_ERROR() ;
     else if ( type == UNRECOGNIZED_TOKEN ) UNRECOGNIZED_TOKEN_ERROR( token ) ;
     else if ( type == UNEXPECTED_TOKEN ) UNEXPECTED_TOKEN_ERROR( token ) ;
+    else if ( type == UNEXPECTED_RIGHTBRACKET_TOKEN ) UNEXPECTED_RIGHTBRACKET_TOKEN_ERROR( token ) ;
     else if ( type == UNDEFINEDID ) UNDEFINEDID_ERROR( token ) ;
     else if ( type == DIVID_ZERO ) DIVID_ZERO_ERROR() ;
   } // ErrorMessage()
@@ -568,7 +578,7 @@ private:
       GetNextToken() ;
 
       // <S-exp>
-      if ( !IsSExp() ) return false ;
+      if ( !IsSExp() ) throw Exception( UNEXPECTED_TOKEN, mCurToken.value ) ;
       GetNextToken() ;
 
       // { <S-exp> }
@@ -579,12 +589,12 @@ private:
       // [ DOT <S-exp> ]
       if ( IsDot() ) {
         GetNextToken() ;
-        if ( !IsSExp() ) return false ;
+        if ( !IsSExp() ) throw Exception( UNEXPECTED_TOKEN, mCurToken.value ) ;
         GetNextToken() ;
       } // if
 
       // RIGHT-PAREN
-      if ( !IsRightParen() ) return false ;
+      if ( !IsRightParen() ) throw Exception( UNEXPECTED_RIGHTBRACKET_TOKEN, mCurToken.value ) ;
 
       return true ;
     } // else if
@@ -700,6 +710,9 @@ public:
 
 } ; // Evaluator
 
+
+// ---------------------------Printer---------------------------------- //
+
 class Printer {
   
 private: 
@@ -788,13 +801,9 @@ private:
     return ( head->content        == NULL && 
              head->left           != NULL && 
              head->right          != NULL && 
-             head->left->content  != NULL && 
              head->right->content != NULL &&
              head->right->content->type != NIL ) ;
   } // IsPaired()
-
-  // Check whether the DS is a cons
-  // Cons have one or more left nodes
 
   bool IsBoolean( Node *head ) {
     return ( head->content->type == NIL || head->content->type == T ) ;
@@ -815,9 +824,9 @@ private:
     if ( mPrintLeftBracketCount_ > 0 ) {
       cout << right << setw( mCurSubroutine_*2 ) << CombineLeftBracket() ;
     } // if
-    else {
+    else if ( mCurSubroutine_ > 0 ) {
       cout << right << setw( mCurSubroutine_*2 ) << " " ;
-    } // else
+    } // else if
 
   } // SetFormat()
 
@@ -836,11 +845,24 @@ private:
     PrintRightBracket() ;
   } // ConsEnd()
 
+  void QuoteBegin( int count ) {
+    while ( count != 0 ) {
+      ConsBegin() ;
+      SetFormat() ;
+      cout << "quote" << endl ;
+      count-- ;
+    } // while
+    
+  } // QuoteBegin()
+
+  void QuoteEnd( int count ) {
+    ConsEnd() ;
+  } // QuoteEnd()
+
   void PrintNodeToken( Node *temp ) {
     if ( temp->content->type == STRING ) PrintString( temp->content ) ;
     else if ( temp->content->type == FLOAT ) PrintFloat( temp->content ) ;
     else if ( temp->content->type == INT ) PrintInt( temp->content ) ;
-    // else if ( temp->content->type == NIL && mCurSubroutine_ > 0 ) cout << "nil" ;
     else cout << temp->content->value << endl ;
   } // PrintNodeToken()
 
@@ -854,6 +876,9 @@ private:
     
     // ---------- case1: empty null ---------- //
     if ( cur->content == NULL ) {
+      
+      // ---------- precheck Quote ---------- //
+      if ( cur->quoteCount ) QuoteBegin( cur->quoteCount ) ;
 
       // ---------- start print node ---------- //
       if ( isCons ) ConsBegin() ;
@@ -869,6 +894,9 @@ private:
       // ---------- go right node ---------- //
       TraversalTree( cur->right, false ) ;
       if ( isCons ) ConsEnd() ;
+
+      // ---------- postcheck Quote ---------- //
+      if ( cur->quoteCount ) QuoteEnd() ;
 
     } // if
     // ---------- case2: right node is nil ---------- //
@@ -889,6 +917,7 @@ public:
     mPrintLeftBracketCount_ = 0 ;
     mCurSubroutine_ = 0 ;
 
+    // Traversal
     TraversalTree( head, true ) ;
 
   } // PrettyPrint()
@@ -914,8 +943,9 @@ public:
 
   void PrintVector( vector<Token> *tokenList ) {
     for ( int i = 0 ; i < tokenList->size() ; i++ ) {
-      cout << tokenList->at(i).value << " " ;
+      cout << tokenList->at( i ).value << " " ;
     } // for
+
     cout << endl ;
   } // PrintVector()
 
@@ -934,7 +964,7 @@ private:
   int mCurSubroutine_ ;
   
   // create and initialize new Atom
-  Node* CreateANewNode() {
+  Node* Create_A_New_Node() {
     Node *oneNode = new Node() ;
 
     oneNode->left = NULL ;
@@ -942,9 +972,10 @@ private:
     oneNode->content = NULL ;
     oneNode->subroutineNum = mCurSubroutine_ ;
     oneNode->isCons = true ;
+    oneNode->quoteCount = 0 ;
 
     return oneNode ;
-  } // CreateANewNode()
+  } // Create_A_New_Node()
 
   // Check whether Token is atom 
   bool IsAtom( Token token ) {
@@ -983,7 +1014,7 @@ private:
   } // CopyCurToken()
 
   Node* SaveToken_with_NewNode() {
-    Node* temp = CreateANewNode() ;
+    Node* temp = Create_A_New_Node() ;
     temp->content = CopyCurToken() ;
     // cout << "Save Token: " << " (" << temp->subroutineNum << ") " 
     //      << temp->content->value << endl ; // DEBUG 
@@ -995,8 +1026,14 @@ private:
     
     mCurSubroutine_++ ;
     
-    Node* root = CreateANewNode() ;
+    Node* root = Create_A_New_Node() ;
     Node* cur = root ;
+
+    // precheck QUOTE
+    while ( mCurToken_.type == QUOTE ) {
+      root->quoteCount++ ;
+      GetNextToken() ;
+    } // if
 
     // buildind a sub tree
     if ( mCurToken_.type == LEFT_PAREN ) {
@@ -1004,11 +1041,14 @@ private:
 
       // case1: ( A B C ) save left atom to node
       // case2: ( A ( B C ) D ) if meet the left bracket, create new node to connect it
-      while ( IsAtom( mCurToken_ ) || mCurToken_.type == LEFT_PAREN ) {
+      while ( IsAtom( mCurToken_ ) 
+           || mCurToken_.type == LEFT_PAREN 
+           || mCurToken_.type == QUOTE ) {
 
-        // if is atom svae to left node
+        // if is atom save to left node
         if ( IsAtom( mCurToken_ ) ) cur->left = SaveToken_with_NewNode() ;
         else if ( mCurToken_.type == LEFT_PAREN ) cur->left = BuildCons() ;
+        else if ( mCurToken_.type == QUOTE ) cur->quoteCount++ ;
 
         // get the next token
         GetNextToken() ;
@@ -1016,7 +1056,7 @@ private:
         // if the got next token is a dot or ), cur can't move to and create right node
         // cause the right node need to check 
         if ( mCurToken_.type != DOT && mCurToken_.type != RIGHT_PAREN ) {  
-          cur->right = CreateANewNode() ;
+          cur->right = Create_A_New_Node() ;
           cur = cur->right ;
         } // if
         
@@ -1045,7 +1085,7 @@ private:
 
   // As the input is not a cons structure 
   Node* BuildOnlyOneNode() {
-    Node *root = CreateANewNode() ;
+    Node *root = Create_A_New_Node() ;
     root->content = CopyCurToken() ;
     root->isCons = false ;
     return root ;
@@ -1060,14 +1100,14 @@ public:
   } // Tree()
 
   // Create A New Tree For Current Token List
-  void CreatANewTree( vector<Token>* tokenList ) {
+  void CreateTree( vector<Token>* tokenList ) {
 
     // ---------- Initialize ---------- //
     SetTokenList( tokenList ) ; // push tokenList in 
     mCurSubroutine_ = 0 ;
 
     // null node in root
-    Node* treeRoot = CreateANewNode() ;
+    Node* treeRoot = Create_A_New_Node() ;
     GetNextToken() ;
 
     // ---------- Building A Tree ---------- //
@@ -1076,7 +1116,7 @@ public:
 
     // ---------- Finish ---------- //
     mRoots_->push_back( treeRoot ) ;
-  } // CreatANewTree()
+  } // CreateTree()
 
   // return current tree root
   Node *GetCurrentRoot() {
@@ -1116,7 +1156,7 @@ private:
       mTokenTable_->push_back( tokenList ) ; // push token list into token table to record
 
       // Building A Tree
-      mAtomTree_.CreatANewTree( tokenList ) ;
+      mAtomTree_.CreateTree( tokenList ) ;
       
       // Clear Tokens
       tokenList->clear() ;
@@ -1163,8 +1203,6 @@ public:
   } // Run()
 
 } ; // OurSheme
-
-
 
 
 // ---------------------------Main Function------------------------------ //
