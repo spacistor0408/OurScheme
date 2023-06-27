@@ -689,7 +689,7 @@ public:
   } // Run()
 
   bool IsExit( const Node *temp ) {
-
+    
     if ( temp == NULL ) return false ;
     else if ( temp->left == NULL || temp->right != NULL ) return false ;
     else if ( temp->left->content == NULL ) return false ;
@@ -914,8 +914,9 @@ public:
 
   void PrintVector( vector<Token> *tokenList ) {
     for ( int i = 0 ; i < tokenList->size() ; i++ ) {
-      cout << tokenList->at(i).value << " " ;
+      cout << tokenList->at( i ).value << " " ;
     } // for
+    
     cout << endl ;
   } // PrintVector()
 
@@ -999,6 +1000,7 @@ private:
     Node* cur = root ;
 
     // buildind a sub tree
+    // ---------- Left Bracket ( ---------- //
     if ( mCurToken_.type == LEFT_PAREN ) {
       GetNextToken() ;
 
@@ -1013,7 +1015,7 @@ private:
         // get the next token
         GetNextToken() ;
 
-        // if the got next token is a dot or ), cur can't move to and create right node
+        // if the next token got is a dot or ), cur can't move to and create right node
         // cause the right node need to check 
         if ( mCurToken_.type != DOT && mCurToken_.type != RIGHT_PAREN ) {  
           cur->right = CreateANewNode() ;
@@ -1038,6 +1040,10 @@ private:
       } // if
 
     } // if
+    // ---------- Quote ' ---------- //
+    else if ( mCurToken_.type == QUOTE ) {
+
+    } // else if
 
     return root ;
 
