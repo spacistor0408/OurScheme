@@ -856,7 +856,11 @@ private:
   } // QuoteBegin()
 
   void QuoteEnd( int count ) {
-    ConsEnd() ;
+    while ( count ) {
+      ConsEnd() ;
+      count-- ;
+    } // while
+
   } // QuoteEnd()
 
   void PrintNodeToken( Node *temp ) {
@@ -896,7 +900,7 @@ private:
       if ( isCons ) ConsEnd() ;
 
       // ---------- postcheck Quote ---------- //
-      if ( cur->quoteCount ) QuoteEnd() ;
+      if ( cur->quoteCount ) QuoteEnd( cur->quoteCount ) ;
 
     } // if
     // ---------- case2: right node is nil ---------- //
