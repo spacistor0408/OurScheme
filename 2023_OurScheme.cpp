@@ -1037,7 +1037,7 @@ private:
     while ( mCurToken_.type == QUOTE ) {
       root->quoteCount++ ;
       GetNextToken() ;
-    } // if
+    } // while
 
     // buildind a sub tree
     if ( mCurToken_.type == LEFT_PAREN ) {
@@ -1046,8 +1046,8 @@ private:
       // case1: ( A B C ) save left atom to node
       // case2: ( A ( B C ) D ) if meet the left bracket, create new node to connect it
       while ( IsAtom( mCurToken_ ) 
-           || mCurToken_.type == LEFT_PAREN 
-           || mCurToken_.type == QUOTE ) {
+              || mCurToken_.type == LEFT_PAREN 
+              || mCurToken_.type == QUOTE ) {
 
         // if is atom save to left node
         if ( IsAtom( mCurToken_ ) ) cur->left = SaveToken_with_NewNode() ;
