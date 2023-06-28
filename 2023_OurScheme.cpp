@@ -700,12 +700,25 @@ public:
 
   bool IsExit( const Node *temp ) {
     
+    // empty node
     if ( temp == NULL ) return false ;
+    // empty leftnode
     else if ( temp->left == NULL ) return false ;
-    else if ( temp->right != NULL && temp->right->content->type != NIL ) return false ;
+    // leftnode has no value
     else if ( temp->left->content == NULL ) return false ;
+    // leftnode value is not exit
     else if ( temp->left->content->value != "exit" ) return false ;
-    return true ;
+    
+    // empty right node
+    if ( temp->right == NULL ) return true ;
+    // right node is NIL and only one
+    else if ( temp->right != NULL          &&
+              temp->right->content != NULL &&
+              temp->right->left == NULL    &&
+              temp->right->right == NULL   && 
+              temp->right->content->type == NIL ) return true ;
+
+    return false ;
 
   } // IsExit()
 
