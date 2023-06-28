@@ -1017,10 +1017,45 @@ private:
              type != QUOTE ) ;
   } // IsAtom()
 
+  Token* LeftBracket() {
+    Token* newToken = new Token() ;
+    newToken->type = LEFT_PAREN ;
+    newToken->value = "(" ;
+    return ;
+  } // LeftBracket()
+
   // Push token vector to queue
   void SetTokenList( vector<Token>* tokenList ) {
     mTokensQueue_ = tokenList ;
   } // SetTokenList()
+
+  // To expand fucntional symbol such as ' -> (quote)
+  void ExpandingSymbol( vector<Token>* tokenList ) {
+
+    Token curToken = tokenList->front() ;
+
+    while ( !tokenList->empty() ) {
+      Token curToken = tokenList->front() ;
+      tokenList->erase( tokenList->begin() ) ;
+
+      if ( curToken.type == QUOTE ) {
+        Token newLeftBracket = curToken ;
+        newLeftBracket.value = "(" ;
+        newLeftBracket.type = LEFT_PAREN ;
+        mTokensQueue_->push_back( newLeftBracket ) ;
+
+        Token newAtom = curToken ;
+        newAtom.value = "quote" ;
+        newAtom.type = QUOTE ;
+        mTokensQueue_->push_back( newAtom ) ;
+      } // if
+      else {
+        mTokensQueue_->push_back( curToken ) ;
+      } // else
+
+    } // while
+
+  } // ExpandingSymbol()
 
   // pop out the first token in token list
   Token GetNextToken() {
