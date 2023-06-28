@@ -50,8 +50,8 @@ struct Node {
   Node *left ;
   Node *right ;
   int subroutineNum ;
-  bool isCons ;
   int quoteCount ;
+  bool isConsBegin ;
 } ;
 
 int g_uTestNum ;
@@ -860,7 +860,7 @@ private:
   } // ConsEnd()
 
   void QuoteBegin( int count ) {
-    while ( count != 0 ) {
+    while ( count > 0 ) {
       ConsBegin() ;
       SetFormat() ;
       cout << "quote" << endl ;
@@ -870,7 +870,7 @@ private:
   } // QuoteBegin()
 
   void QuoteEnd( int count ) {
-    while ( count ) {
+    while ( count > 0 ) {
       ConsEnd() ;
       count-- ;
     } // while
@@ -902,6 +902,9 @@ private:
       if ( isCons ) ConsBegin() ;
       // ---------- go left node ---------- //
       TraversalTree( cur->left, true ) ;
+      
+      // ---------- only print left node ---------- //
+      if ( ! cur->isConsBegin && cur->quoteCount ) QuoteEnd( cur->quoteCount ) ;
 
       // if is paired ( A . B )
       if ( IsPaired( cur ) ) {
@@ -913,18 +916,26 @@ private:
       TraversalTree( cur->right, false ) ;
       if ( isCons ) ConsEnd() ;
 
-      // ---------- postcheck Quote ---------- //
-      if ( cur->quoteCount ) QuoteEnd( cur->quoteCount ) ;
-
+      // ---------- print all atom Quote ---------- //
+      if ( cur->isConsBegin && cur->quoteCount ) QuoteEnd( cur->quoteCount ) ;
     } // if
+
     // ---------- case2: right node is nil ---------- //
     else if ( cur->content->type == NIL && !isCons ) {
       return ;
     } // else if
+    
     // ---------- case3: atom ---------- //
     else {
+      // ---------- precheck Quote ---------- //
+      if ( cur->quoteCount ) QuoteBegin( cur->quoteCount ) ;
+
       SetFormat() ;
       PrintNodeToken( cur ) ;
+
+      // ---------- postcheck Quote ---------- //
+      if ( cur->quoteCount ) QuoteEnd( cur->quoteCount ) ;
+
     } // else if
 
   } // TraversalTree()
@@ -991,8 +1002,8 @@ private:
     oneNode->right = NULL ;
     oneNode->content = NULL ;
     oneNode->subroutineNum = mCurSubroutine_ ;
-    oneNode->isCons = true ;
     oneNode->quoteCount = 0 ;
+    oneNode->isConsBegin = false ;
 
     return oneNode ;
   } // Create_A_New_Node()
@@ -1058,25 +1069,35 @@ private:
     // buildind a sub tree
     // ---------- Left Bracket ( ---------- //
     if ( mCurToken_.type == LEFT_PAREN ) {
+      root->isConsBegin = true ;
       GetNextToken() ;
 
       // case1: ( A B C ) save left atom to node
       // case2: ( A ( B C ) D ) if meet the left bracket, create new node to connect it
-      while ( IsAtom( mCurToken_ ) 
-              || mCurToken_.type == LEFT_PAREN 
-              || mCurToken_.type == QUOTE ) {
+      while ( IsAtom( mCurToken_ )          ||
+              mCurToken_.type == LEFT_PAREN ||
+              mCurToken_.type == QUOTE ) {
+        
+        bool isQuote = false ;
 
         // if is atom save to left node
         if ( IsAtom( mCurToken_ ) ) cur->left = SaveToken_with_NewNode() ;
+        // if is subtree, save to left node
         else if ( mCurToken_.type == LEFT_PAREN ) cur->left = BuildCons() ;
-        else if ( mCurToken_.type == QUOTE ) cur->quoteCount++ ;
+        // if is qoute, cur node recording
+        else if ( mCurToken_.type == QUOTE ) {
+          cur->quoteCount++ ;
+          isQuote = true ;
+        } // else if
 
         // get the next token
         GetNextToken() ;
 
         // if the next token got is a dot or ), cur can't move to and create right node
         // cause the right node need to check 
-        if ( mCurToken_.type != DOT && mCurToken_.type != RIGHT_PAREN ) {  
+        if ( mCurToken_.type != DOT         && 
+             mCurToken_.type != RIGHT_PAREN &&
+             ! isQuote ) {  
           cur->right = Create_A_New_Node() ;
           cur = cur->right ;
         } // if
@@ -1099,9 +1120,12 @@ private:
       } // if
 
     } // if
-    // ---------- Quote ' ---------- //
-    else if ( mCurToken_.type == QUOTE ) {
-
+    // ---------- Atom ---------- //
+    else if ( IsAtom( mCurToken_ ) ) {
+      // ex. 'a ''()
+      root->content = CopyCurToken() ;
+      // cout << root->quoteCount ;
+      return root ;
     } // else if
 
     return root ;
@@ -1112,7 +1136,6 @@ private:
   Node* BuildOnlyOneNode() {
     Node *root = Create_A_New_Node() ;
     root->content = CopyCurToken() ;
-    root->isCons = false ;
     return root ;
   } // BuildOnlyOneNode()
 
