@@ -701,7 +701,8 @@ public:
   bool IsExit( const Node *temp ) {
     
     if ( temp == NULL ) return false ;
-    else if ( temp->left == NULL || temp->right != NULL ) return false ;
+    else if ( temp->left == NULL ) return false ;
+    else if ( temp->right != NULL && temp->right->content->type != NIL ) return false ;
     else if ( temp->left->content == NULL ) return false ;
     else if ( temp->left->content->value != "exit" ) return false ;
     return true ;
