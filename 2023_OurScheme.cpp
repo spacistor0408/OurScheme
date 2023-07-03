@@ -50,7 +50,6 @@ struct Node {
   Node *left ;
   Node *right ;
   int subroutineNum ;
-  int quoteCount ;
   bool isConsBegin ;
 } ;
 
@@ -679,52 +678,6 @@ class SemanticsAnalyzer {
 } ; // SemanticsAnalyzer
 
 
-// ---------------------------Evaluator---------------------------------- //
-
-class Evaluator {
-
-private:
-
-public:
-
-  // Go through Right
-  void Run( Node *root ) {
-
-    Node *temp = root ;
-
-    while ( temp->right != NULL ) {
-      temp = temp->right ;
-    } // while
-
-  } // Run()
-
-  bool IsExit( const Node *temp ) {
-    
-    // empty node
-    if ( temp == NULL ) return false ;
-    // empty leftnode
-    else if ( temp->left == NULL ) return false ;
-    // leftnode has no value
-    else if ( temp->left->content == NULL ) return false ;
-    // leftnode value is not exit
-    else if ( temp->left->content->value != "exit" ) return false ;
-    
-    // empty right node
-    if ( temp->right == NULL ) return true ;
-    // right node is NIL and only one
-    else if ( temp->right != NULL          &&
-              temp->right->content != NULL &&
-              temp->right->left == NULL    &&
-              temp->right->right == NULL   && 
-              temp->right->content->type == NIL ) return true ;
-
-    return false ;
-
-  } // IsExit()
-
-} ; // Evaluator
-
-
 // ---------------------------Printer---------------------------------- //
 
 class Printer {
@@ -859,28 +812,11 @@ private:
     PrintRightBracket() ;
   } // ConsEnd()
 
-  void QuoteBegin( int count ) {
-    while ( count > 0 ) {
-      ConsBegin() ;
-      SetFormat() ;
-      cout << "quote" << endl ;
-      count-- ;
-    } // while
-    
-  } // QuoteBegin()
-
-  void QuoteEnd( int count ) {
-    while ( count > 0 ) {
-      ConsEnd() ;
-      count-- ;
-    } // while
-
-  } // QuoteEnd()
-
   void PrintNodeToken( Node *temp ) {
     if ( temp->content->type == STRING ) PrintString( temp->content ) ;
     else if ( temp->content->type == FLOAT ) PrintFloat( temp->content ) ;
     else if ( temp->content->type == INT ) PrintInt( temp->content ) ;
+    else if ( temp->content->type == QUOTE ) cout << "quote" << endl ;
     else cout << temp->content->value << endl ;
   } // PrintNodeToken()
 
@@ -894,17 +830,11 @@ private:
     
     // ---------- case1: empty null ---------- //
     if ( cur->content == NULL ) {
-      
-      // ---------- precheck Quote ---------- //
-      if ( cur->quoteCount ) QuoteBegin( cur->quoteCount ) ;
 
       // ---------- start print node ---------- //
-      if ( isCons ) ConsBegin() ;
+      if ( isCons ) ConsBegin() ; // add a ( to print queue
       // ---------- go left node ---------- //
       TraversalTree( cur->left, true ) ;
-      
-      // ---------- only print left node ---------- //
-      if ( ! cur->isConsBegin && cur->quoteCount ) QuoteEnd( cur->quoteCount ) ;
 
       // if is paired ( A . B )
       if ( IsPaired( cur ) ) {
@@ -916,8 +846,6 @@ private:
       TraversalTree( cur->right, false ) ;
       if ( isCons ) ConsEnd() ;
 
-      // ---------- print all atom Quote ---------- //
-      if ( cur->isConsBegin && cur->quoteCount ) QuoteEnd( cur->quoteCount ) ;
     } // if
 
     // ---------- case2: right node is nil ---------- //
@@ -927,16 +855,10 @@ private:
     
     // ---------- case3: atom ---------- //
     else {
-      // ---------- precheck Quote ---------- //
-      if ( cur->quoteCount ) QuoteBegin( cur->quoteCount ) ;
-
       SetFormat() ;
       PrintNodeToken( cur ) ;
 
-      // ---------- postcheck Quote ---------- //
-      if ( cur->quoteCount ) QuoteEnd( cur->quoteCount ) ;
-
-    } // else if
+    } // else
 
   } // TraversalTree()
 
@@ -982,6 +904,7 @@ public:
 
 } ; // Printer
 
+
 // ---------------------------Tree Data Structure------------------------ //
 
 class Tree {
@@ -1002,7 +925,6 @@ private:
     oneNode->right = NULL ;
     oneNode->content = NULL ;
     oneNode->subroutineNum = mCurSubroutine_ ;
-    oneNode->quoteCount = 0 ;
     oneNode->isConsBegin = false ;
 
     return oneNode ;
@@ -1017,45 +939,10 @@ private:
              type != QUOTE ) ;
   } // IsAtom()
 
-  Token* LeftBracket() {
-    Token* newToken = new Token() ;
-    newToken->type = LEFT_PAREN ;
-    newToken->value = "(" ;
-    return ;
-  } // LeftBracket()
-
   // Push token vector to queue
   void SetTokenList( vector<Token>* tokenList ) {
     mTokensQueue_ = tokenList ;
   } // SetTokenList()
-
-  // To expand fucntional symbol such as ' -> (quote)
-  void ExpandingSymbol( vector<Token>* tokenList ) {
-
-    Token curToken = tokenList->front() ;
-
-    while ( !tokenList->empty() ) {
-      Token curToken = tokenList->front() ;
-      tokenList->erase( tokenList->begin() ) ;
-
-      if ( curToken.type == QUOTE ) {
-        Token newLeftBracket = curToken ;
-        newLeftBracket.value = "(" ;
-        newLeftBracket.type = LEFT_PAREN ;
-        mTokensQueue_->push_back( newLeftBracket ) ;
-
-        Token newAtom = curToken ;
-        newAtom.value = "quote" ;
-        newAtom.type = QUOTE ;
-        mTokensQueue_->push_back( newAtom ) ;
-      } // if
-      else {
-        mTokensQueue_->push_back( curToken ) ;
-      } // else
-
-    } // while
-
-  } // ExpandingSymbol()
 
   // pop out the first token in token list
   Token GetNextToken() {
@@ -1095,12 +982,6 @@ private:
     Node* root = Create_A_New_Node() ;
     Node* cur = root ;
 
-    // precheck QUOTE
-    while ( mCurToken_.type == QUOTE ) {
-      root->quoteCount++ ;
-      GetNextToken() ;
-    } // while
-
     // buildind a sub tree
     // ---------- Left Bracket ( ---------- //
     if ( mCurToken_.type == LEFT_PAREN ) {
@@ -1112,27 +993,26 @@ private:
       while ( IsAtom( mCurToken_ )          ||
               mCurToken_.type == LEFT_PAREN ||
               mCurToken_.type == QUOTE ) {
-        
-        bool isQuote = false ;
 
         // if is atom save to left node
         if ( IsAtom( mCurToken_ ) ) cur->left = SaveToken_with_NewNode() ;
         // if is subtree, save to left node
         else if ( mCurToken_.type == LEFT_PAREN ) cur->left = BuildCons() ;
-        // if is qoute, cur node recording
+        // if is qoute, save to left node
         else if ( mCurToken_.type == QUOTE ) {
-          cur->quoteCount++ ;
-          isQuote = true ;
+          cur->left = SaveToken_with_NewNode() ;
+          cur->right = Create_A_New_Node() ;
+          cur = cur->right ;
+          GetNextToken() ;
+          cur->left = BuildCons() ;
         } // else if
-
+          
         // get the next token
         GetNextToken() ;
 
         // if the next token got is a dot or ), cur can't move to and create right node
         // cause the right node need to check 
-        if ( mCurToken_.type != DOT         && 
-             mCurToken_.type != RIGHT_PAREN &&
-             ! isQuote ) {  
+        if ( mCurToken_.type != DOT && mCurToken_.type != RIGHT_PAREN ) {  
           cur->right = Create_A_New_Node() ;
           cur = cur->right ;
         } // if
@@ -1141,11 +1021,11 @@ private:
 
       // case3: ( A . B )
       if ( mCurToken_.type == DOT ) {
-        GetNextToken() ;
+        GetNextToken() ; // get next token
 
         if ( IsAtom( mCurToken_ ) ) cur->right = SaveToken_with_NewNode() ;
         else if ( mCurToken_.type == LEFT_PAREN ) cur->right = BuildCons() ;
-        GetNextToken() ;
+        GetNextToken() ; // get next token
 
       } // if: Dot
 
@@ -1159,8 +1039,15 @@ private:
     else if ( IsAtom( mCurToken_ ) ) {
       // ex. 'a ''()
       root->content = CopyCurToken() ;
-      // cout << root->quoteCount ;
       return root ;
+    } // else if
+    // ---------- Quote --------- //
+    else if ( mCurToken_.type == QUOTE ) {
+      cur->left = SaveToken_with_NewNode() ;
+      cur->right = Create_A_New_Node() ;
+      cur = cur->right ;
+      GetNextToken() ; // get next token
+      cur->left = BuildCons() ;
     } // else if
 
     return root ;
@@ -1208,6 +1095,52 @@ public:
   } // GetCurrentRoot()
 
 } ; // Tree
+
+
+// ---------------------------Evaluator---------------------------------- //
+
+class Evaluator {
+
+private:
+  Printer mPrinter_ ;
+
+public:
+
+  // Go through Right
+  void Evaluate( Node *root ) {
+
+    mPrinter_.PrettyPrint( root ) ;
+
+    Node *cur = root ;
+
+  } // Evaluate()
+
+  bool IsExit( const Node *temp ) {
+    
+    // empty node
+    if ( temp == NULL ) return false ;
+    // empty leftnode
+    else if ( temp->left == NULL ) return false ;
+    // leftnode has no value
+    else if ( temp->left->content == NULL ) return false ;
+    // leftnode value is not exit
+    else if ( temp->left->content->value != "exit" ) return false ;
+    
+    // empty right node
+    if ( temp->right == NULL ) return true ;
+    // right node is NIL and only one
+    else if ( temp->right != NULL          &&
+              temp->right->content != NULL &&
+              temp->right->left == NULL    &&
+              temp->right->right == NULL   && 
+              temp->right->content->type == NIL ) return true ;
+
+    return false ;
+
+  } // IsExit()
+
+} ; // Evaluator
+
 
 // ---------------------------OurScheme System--------------------------- //
 
