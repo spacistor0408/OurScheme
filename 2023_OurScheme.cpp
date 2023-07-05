@@ -898,7 +898,6 @@ public:
       cout << tokenList->at( i ).value << " " ;
     } // for
     
-
     cout << endl ;
   } // PrintVector()
 
@@ -941,8 +940,64 @@ private:
 
   // Push token vector to queue
   void SetTokenList( vector<Token>* tokenList ) {
-    mTokensQueue_ = tokenList ;
+
+    mTokensQueue_ = PreProcessingTokenList( tokenList ) ;
+    // mTokensQueue_ = tokenList ;
   } // SetTokenList()
+
+  vector<Token>* PreProcessingTokenList( vector<Token>* tokenList  ) {
+    vector<Token> *queue = new vector<Token>() ;
+    // record how many index of bracket in quote
+    vector<int> *bracketIndex = new vector<int>() ;
+
+    while ( ! tokenList->empty() ) {
+      Token curToken = GetNextToken( tokenList ) ;
+
+      if ( curToken.type == QUOTE  ) {
+        // ('.(nil))
+        queue->push_back( CreateNewToken( "(", LEFT_PAREN ) ) ;
+        queue->push_back( curToken ) ; // quote
+        bracketIndex->push_back( 0 ) ;
+      } // if
+      else {
+        queue->push_back( curToken ) ;
+
+        // if it has quote 
+        if ( ! bracketIndex->empty() ) {
+          // to record
+          if ( curToken.type == LEFT_PAREN ) bracketIndex->back()++ ;
+          else if ( curToken.type == RIGHT_PAREN ) bracketIndex->back()-- ;
+
+          // if there is no index of bracket, fill in right bracket
+          while ( ! bracketIndex->empty() && bracketIndex->back() == 0 ) {
+            bracketIndex->pop_back() ;
+            queue->push_back( CreateNewToken( ")", RIGHT_PAREN ) ) ;
+          } // while
+        } // if 
+
+      } // else
+    } // while
+
+    // for ( int i = 0 ; i < queue->size() ; i++ ) {
+    //   cout << queue->at(i).value << " " ;
+    // } // for
+    // cout << endl ;
+    return queue ;
+  
+  } // PreProcessingTokenList()
+
+  Token CreateNewToken( string value, TokenType type ) {
+    Token newToken ;
+    newToken.value = value ;
+    newToken.type = type ;
+    return newToken ; 
+  } // CreateNewToken()
+
+  Token GetNextToken( vector<Token>* tokenList ) {
+    Token curToken = tokenList->front() ; // Get first token
+    tokenList->erase( tokenList->begin() ) ;
+    return curToken ;
+  } // GetNextToken()
 
   // pop out the first token in token list
   Token GetNextToken() {
@@ -974,11 +1029,10 @@ private:
     return temp ;
   } // SaveToken_with_NewNode()
 
-  // Build the cons structure
+  // Build the constructure
   Node* BuildCons() {
     
     mCurSubroutine_++ ;
-    
     Node* root = Create_A_New_Node() ;
     Node* cur = root ;
 
@@ -986,6 +1040,7 @@ private:
     // ---------- Left Bracket ( ---------- //
     if ( mCurToken_.type == LEFT_PAREN ) {
       root->isConsBegin = true ;
+
       GetNextToken() ;
 
       // case1: ( A B C ) save left atom to node
@@ -1000,6 +1055,9 @@ private:
         else if ( mCurToken_.type == LEFT_PAREN ) cur->left = BuildCons() ;
         // if is qoute, save to left node
         else if ( mCurToken_.type == QUOTE ) {
+
+          // if is '(') keep the left bracket exist
+
           cur->left = SaveToken_with_NewNode() ;
           cur->right = Create_A_New_Node() ;
           cur = cur->right ;
@@ -1038,17 +1096,17 @@ private:
     // ---------- Atom ---------- //
     else if ( IsAtom( mCurToken_ ) ) {
       // ex. 'a ''()
-      root->content = CopyCurToken() ;
+      cur->content = CopyCurToken() ;
       return root ;
     } // else if
     // ---------- Quote --------- //
-    else if ( mCurToken_.type == QUOTE ) {
-      cur->left = SaveToken_with_NewNode() ;
-      cur->right = Create_A_New_Node() ;
-      cur = cur->right ;
-      GetNextToken() ; // get next token
-      cur->left = BuildCons() ;
-    } // else if
+    // else if ( mCurToken_.type == QUOTE ) {
+    //   cur->left = SaveToken_with_NewNode() ;
+    //   cur->right = Create_A_New_Node() ;
+    //   cur = cur->right ;
+    //   GetNextToken() ; // get next token
+    //   cur->left = BuildCons() ;
+    // } // else if
 
     return root ;
 
@@ -1081,7 +1139,7 @@ public:
     GetNextToken() ;
 
     // ---------- Building A Tree ---------- //
-    if ( tokenList->empty() ) treeRoot = BuildOnlyOneNode() ;
+    if ( mTokensQueue_->empty() ) treeRoot = BuildOnlyOneNode() ;
     else treeRoot = BuildCons() ;
 
     // ---------- Finish ---------- //
