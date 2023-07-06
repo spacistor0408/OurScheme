@@ -33,9 +33,17 @@ enum ErrorType {
 } ;
 
 enum PrimitiveType {
-  CONSTRUCTOR,
-  OPERATOR, 
-  EQUIVALENCE
+  CONSTRUCTOR,          // cons    (2), list   (>=0)
+  QUOTE_BYPASS,         // '       (1), quote  (1)
+  DEFINE,               // define  (2)
+  PART_ACCESSORS,       // car     (1), cdr    (1)
+  PRIMITIVE_PREDICTATE, // atom? pair? list? null? integer? real? number? string? boolean? symbol? (1)
+  BASIC_ARITHMETIC,     // not (1) + - * / and or > >= < <= = string-append string>? string<? string=? (>=2)
+  EQUIVALENCE,          // eqv?    (2), equal? (2)
+  BEGIN,                // begin   (>=1)
+  CONDITIONAL,          // if      (2 or 3), cond (>=1)
+  CLEAN_ENVIRONMENT,    // clean-environment(0)
+  EXIT
 } ;
 
 struct Token {
