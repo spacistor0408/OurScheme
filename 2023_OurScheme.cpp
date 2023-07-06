@@ -41,8 +41,6 @@ enum PrimitiveType {
 struct Token {
   string value ;
   TokenType type ;
-  int lineNum ;
-  int column ;
 } ;
 
 struct Node {
@@ -80,6 +78,13 @@ public:
   static bool IsDigit( char ch ) {
     return ( ch >= '0' && ch <= '9' ) ;
   } // IsDigit()
+
+  static Token CreateNewToken( string value, TokenType type ) {
+    Token newToken ;
+    newToken.value = value ;
+    newToken.type = type ;
+    return newToken ; 
+  } // CreateNewToken()
 
 } ; // SystemFunctions
 
@@ -192,7 +197,8 @@ public:
   } // Reader()
 
   char PeekChar() {
-    return cin.peek() ;
+    char peek = cin.peek() ;
+    return ( peek == EOF ) ? EOF : peek ;
   } // PeekChar()
 
   char GetChar() {
@@ -234,15 +240,19 @@ private:
   } // UpdateTokenPos()
 
   void Remove_RestOfCharInThisLine() {
-    while ( mReader_.PeekChar() != '\n' ) {
+    char peek = mReader_.PeekChar() ;
+    while ( peek != '\n' && peek != EOF ) {
       mReader_.GetChar() ;
+      peek = mReader_.PeekChar() ;
     } // while
   } // Remove_RestOfCharInThisLine()
 
   char PreProcessingPeek() {
     char peekChar = mReader_.PeekChar() ;
     
-    while ( IsWhiteSpace( peekChar ) || IsComment( peekChar ) || IsNewLine( peekChar ) ) {
+    while ( IsWhiteSpace( peekChar ) ||
+            IsComment( peekChar )    ||
+            IsNewLine( peekChar ) ) {
 
       // comment case
       if ( IsComment( peekChar ) ) {
@@ -395,10 +405,12 @@ private:
     return ( ch == ';' ) ;
   } // IsComment()
 
+  // To check whether the token is Dot
   bool IsDot( char ch ) {
     return ( ch == '.' ) ;
   } // IsDot()
 
+  // To check whether the token is sign
   bool IsSign( char ch ) {
     return ( ch == '+' || ch == '-' ) ;
   } // IsSign()
@@ -408,6 +420,7 @@ private:
     return SystemFunctions::IsDigit( ch ) ;
   } // IsDigit()
 
+  // To check whether the token is EOF
   bool IsEOF( char ch ) {
     return ( ch == EOF ) ;
   } // IsEOF()
@@ -491,8 +504,7 @@ private:
 
     oneToken.value = mCurrent_token_ ; 
     oneToken.type = mCurrent_tokenType_ ;
-    oneToken.lineNum = mLineNum_ ;
-    oneToken.column = mColumn_ ;
+
     return oneToken ;
   } // CreateToken()
 
@@ -955,7 +967,7 @@ private:
 
       if ( curToken.type == QUOTE  ) {
         // ('.(nil))
-        queue->push_back( CreateNewToken( "(", LEFT_PAREN ) ) ;
+        queue->push_back( SystemFunctions::CreateNewToken( "(", LEFT_PAREN ) ) ;
         queue->push_back( curToken ) ; // quote
         bracketIndex->push_back( 0 ) ;
       } // if
@@ -971,7 +983,7 @@ private:
           // if there is no index of bracket, fill in right bracket
           while ( ! bracketIndex->empty() && bracketIndex->back() == 0 ) {
             bracketIndex->pop_back() ;
-            queue->push_back( CreateNewToken( ")", RIGHT_PAREN ) ) ;
+            queue->push_back( SystemFunctions::CreateNewToken( ")", RIGHT_PAREN ) ) ;
           } // while
         } // if 
 
@@ -985,13 +997,6 @@ private:
     return queue ;
   
   } // PreProcessingTokenList()
-
-  Token CreateNewToken( string value, TokenType type ) {
-    Token newToken ;
-    newToken.value = value ;
-    newToken.type = type ;
-    return newToken ; 
-  } // CreateNewToken()
 
   Token GetNextToken( vector<Token>* tokenList ) {
     Token curToken = tokenList->front() ; // Get first token
@@ -1014,8 +1019,6 @@ private:
   // Copy current token to a new Token
   Token* CopyCurToken() {
     Token* newToken = new Token() ;
-    newToken->column = mCurToken_.column ;
-    newToken->lineNum = mCurToken_.lineNum ;
     newToken->type = mCurToken_.type ;
     newToken->value = mCurToken_.value ;
     return newToken ;
@@ -1099,25 +1102,10 @@ private:
       cur->content = CopyCurToken() ;
       return root ;
     } // else if
-    // ---------- Quote --------- //
-    // else if ( mCurToken_.type == QUOTE ) {
-    //   cur->left = SaveToken_with_NewNode() ;
-    //   cur->right = Create_A_New_Node() ;
-    //   cur = cur->right ;
-    //   GetNextToken() ; // get next token
-    //   cur->left = BuildCons() ;
-    // } // else if
 
     return root ;
 
   } // BuildCons()
-
-  // As the input is not a cons structure 
-  Node* BuildOnlyOneNode() {
-    Node *root = Create_A_New_Node() ;
-    root->content = CopyCurToken() ;
-    return root ;
-  } // BuildOnlyOneNode()
 
 public:
   
@@ -1139,8 +1127,7 @@ public:
     GetNextToken() ;
 
     // ---------- Building A Tree ---------- //
-    if ( mTokensQueue_->empty() ) treeRoot = BuildOnlyOneNode() ;
-    else treeRoot = BuildCons() ;
+    treeRoot = BuildCons() ;
 
     // ---------- Finish ---------- //
     mRoots_->push_back( treeRoot ) ;
@@ -1160,21 +1147,55 @@ public:
 class Evaluator {
 
 private:
+  
   Printer mPrinter_ ;
+  vector<Token> *mCommand_ ;
 
-public:
+  void Evaluate( Node *head, bool isCons ) {
 
-  // Go through Right
-  void Evaluate( Node *root ) {
+    Node *cur = head ;
 
-    mPrinter_.PrettyPrint( root ) ;
+    // terminal condition
+    if ( cur == NULL ) return ;
 
-    Node *cur = root ;
+    if ( cur->content == NULL ) {
+      
+      mCommand_->push_back( SystemFunctions::CreateNewToken( "(", LEFT_PAREN ) ) ;
+      Evaluate( cur->left, true ) ;
+      Evaluate( cur->right, false ) ;
+      mCommand_->push_back( SystemFunctions::CreateNewToken( ")", RIGHT_PAREN ) ) ;
+    } // if
+    else if ( cur->content->type == NIL ) return ;
+    else {
+      mCommand_->push_back( CopyToken( cur ) ) ;
+    } // else
 
   } // Evaluate()
 
+  Token CopyToken( Node* node ) {
+    Token newToken ;
+    newToken.value = node->content->value ;
+    newToken.type = node->content->type ;
+    return newToken ;
+  } // CopyToken()
+
+public:
+
+  Evaluator() {
+    mCommand_ = new vector<Token>() ;
+  } // Evaluator()
+
+  // Go through Right
+  void Execute( Node *root ) {
+    mCommand_->clear() ;
+
+    Evaluate( root, true ) ;
+    // mPrinter_.PrettyPrint( root ) ;
+
+  } // Execute()
+
   bool IsExit( const Node *temp ) {
-    
+
     // empty node
     if ( temp == NULL ) return false ;
     // empty leftnode
@@ -1248,7 +1269,7 @@ public:
   void Run() {
 
     cout << "Welcome to OurScheme!" << endl << endl ;
-    
+
     while ( !mQuit_ && !mErrorQuit_ ) {
 
       cout << "> " ;
@@ -1256,8 +1277,12 @@ public:
       try {
         ReadSExp() ;
         Node *curAtomRoot = mAtomTree_.GetCurrentRoot() ;
+        // mEvaluator_.Execute( curAtomRoot ) ;
         if ( mEvaluator_.IsExit( curAtomRoot ) ) mQuit_ = true ;
-        else mPrinter_.PrettyPrint( curAtomRoot ) ; // Pretty print
+        else {
+          mPrinter_.PrettyPrint( curAtomRoot ) ; // Pretty print
+        } // else
+
       } // try
       catch ( const Exception& e ) {
         
@@ -1289,7 +1314,6 @@ int main() {
   gLineNum = 1 ;
   gColumn = 0 ;
   
-
   OurScheme ourSheme = OurScheme() ;
   ourSheme.Run() ;
 
