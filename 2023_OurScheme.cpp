@@ -9,6 +9,8 @@
 
 using namespace std;
 
+#define MAX_MEMORY_SIZE 1024
+
 enum TokenType {
   LEFT_PAREN = 0,
   RIGHT_PAREN = 1, 
@@ -29,7 +31,8 @@ enum ErrorType {
   UNEXPECTED_TOKEN,
   UNEXPECTED_RIGHTBRACKET_TOKEN,
   UNDEFINEDID,
-  DIVID_ZERO
+  DIVID_ZERO,
+  MEMORY_NOT_ENOUGH
 } ;
 
 enum PrimitiveType {
@@ -58,6 +61,15 @@ struct Node {
   int subroutineNum ;
   bool isConsBegin ;
 } ;
+
+// Type of Data in Symbol table 
+struct Symbol {
+  int subroutine ;
+  string name ;
+  Node* valueRoot ; // record the tree root 
+  Symbol* next ;
+} ;
+
 
 int g_uTestNum ;
 int gLineNum ;
@@ -157,6 +169,10 @@ private:
     cout << "Devision by zero\n" ;
   } // DIVID_ZERO_ERROR()
 
+  static void MEMORY_NOT_ENOUGH_ERROR() {
+    cout << "Memory dosen't enough\n" ;
+  } // DIVID_ZERO_ERROR()
+
 public:
 
   static void ErrorMessage( ErrorType type, string token ) {
@@ -167,12 +183,150 @@ public:
     else if ( type == UNEXPECTED_RIGHTBRACKET_TOKEN ) UNEXPECTED_RIGHTBRACKET_TOKEN_ERROR( token ) ;
     else if ( type == UNDEFINEDID ) UNDEFINEDID_ERROR( token ) ;
     else if ( type == DIVID_ZERO ) DIVID_ZERO_ERROR() ;
+    else if ( type == MEMORY_NOT_ENOUGH ) MEMORY_NOT_ENOUGH_ERROR() ;
   } // ErrorMessage()
 
 } ; // ErrorHadling
 
 
-// ---------------------------Reader ------------------------------------ //
+
+/* ---------------------------DataBase------------------------------------ */
+
+class Hash {
+
+  public:
+  static int Eval_Key( string str ) {
+    int hashkey = 0 ;
+
+    for ( int i = 0 ; i < str.size() ; i++ ) {
+      hashkey = ( hashkey + str[i] ) % MAX_MEMORY_SIZE ;
+    } // for
+
+    return hashkey ;
+  } // Eval_Key
+
+} ; // Hash
+
+// ---------------------------Symbol Table------------------------------------ //
+/**
+ * Symbol Table using hash function to store name and value.
+ * 
+*/
+class SymbolTable {
+  
+  private:
+  vector<Symbol*> *mSymbolTable_ ;
+
+  Symbol* CreateASymbol( string name, Node* head ) {
+    Symbol* newSymbol = new Symbol() ;
+    newSymbol->name = name ;
+    newSymbol->valueRoot = head ;
+    newSymbol->next = NULL ;
+    return newSymbol ;
+  } // CreateASymbol()
+
+  // Evaluateing key and dealing with collision
+  // case1: if there is same name symbol, return it's key
+  // case2: if there is no same name symbol, return the key 
+  // which is empty ( NULL or name == "\0" ) and nearest to original hash key
+  int GetKey( string name ) {
+    int key = Hash::Eval_Key( name ) ;
+    int empty_node_Key = -1 ;
+    int count = 0 ;
+    Symbol* cur = mSymbolTable_->at( key ) ;
+    
+    // if same name, return the key
+    if ( cur != NULL && cur->name == name ) return key ;
+
+    // if the not NULL means the key had used before
+    while ( cur != NULL ) {
+      if ( cur->name == name ) return key ;
+      else if ( cur->name == "\0" && empty_node_Key == -1 ) empty_node_Key = key ;
+
+      key++ ;
+      key %= MAX_MEMORY_SIZE ; // avoid out of size ;
+      cur = mSymbolTable_->at( key ) ;
+
+      // if all memory are fulled
+      if ( count >= MAX_MEMORY_SIZE ) throw Exception( MEMORY_NOT_ENOUGH ) ;
+    } // while
+
+    // if there is any name = "\0"
+    if ( empty_node_Key != -1 ) return empty_node_Key ;
+
+    return key ;
+
+  } // GetKey()
+  
+  // Free the memory space of a tree 
+  void FreeUpValue( Node* head ) {
+
+    if ( head == NULL ) return ;
+
+    FreeUpValue( head->left ) ;
+    FreeUpValue( head->right ) ;
+
+    delete head ;
+
+    head = NULL ;
+
+  } // FreeUpValue()
+
+  public:
+  SymbolTable() {
+    mSymbolTable_ = new vector<Symbol*>( MAX_MEMORY_SIZE ) ;
+  } // SymbolTable()
+
+  void Insert( string name, Node* head ) {
+    int key = GetKey( name ) ;
+    Symbol* cur = mSymbolTable_->at( key ) ;
+
+    // check whether collision occured
+    // Note: In fact it's checked in GetKey Function
+    if ( cur == NULL ) mSymbolTable_->at( key ) = CreateASymbol( name, head ) ;
+
+    // if the node dosen't free up, free it and appendit
+    else if ( cur->name == "\0" ) {
+      delete mSymbolTable_->at( key ) ;
+      mSymbolTable_->at( key ) = CreateASymbol( name, head ) ;
+    } // else if
+
+    // if collision and the symbol has same name
+    else if ( cur->name == name ) {
+      // go to the last not NULL symbol
+      while ( cur->next != NULL ) cur = cur->next ;
+      // append the new same name symbol to last
+      cur->next = CreateASymbol( name, head ) ;
+    } // else if
+
+    // if collision 
+    else {
+      throw Exception( MEMORY_NOT_ENOUGH ) ;
+    } // else
+    
+  } // Insert()
+
+  // Only Delete the content but not to free up space, so the pointer would be exist
+  void Delete( string name ) {
+
+    int key = GetKey( name ) ;
+    mSymbolTable_->at( key )->name = "\0" ;
+    // free the tree memory
+    FreeUpValue( mSymbolTable_->at( key )->valueRoot ) ;
+    mSymbolTable_->at( key )->valueRoot = NULL ;
+
+    // TODO next Case
+  } // Delete()
+  
+  // clear symbol table
+  void Clear() {
+    mSymbolTable_->clear() ;
+  } // Clear()
+
+} ;
+
+/* ---------------------------Processing Stage--------------------------- */
+// ---------------------------Reader------------------------------------- //
 
 class Reader {
 
@@ -1198,7 +1352,6 @@ public:
     mCommand_->clear() ;
 
     Evaluate( root, true ) ;
-    // mPrinter_.PrettyPrint( root ) ;
 
   } // Execute()
 
