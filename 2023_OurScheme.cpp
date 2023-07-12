@@ -32,7 +32,14 @@ enum ErrorType {
   UNEXPECTED_RIGHTBRACKET_TOKEN,
   UNDEFINEDID,
   DIVID_ZERO,
-  MEMORY_NOT_ENOUGH
+  MEMORY_NOT_ENOUGH,
+  UNBOUND_SYMBOL,
+  NON_LIST,
+  NON_FUNCTION,
+  LEVEL_OF_EXIT,
+  LEVEL_OF_DEFINE,
+  LEVEL_OF_CLEAN_ENVIRONMENT,
+  INCORRECT_ARGUMENTS
 } ;
 
 enum PrimitiveType {
@@ -46,12 +53,14 @@ enum PrimitiveType {
   BEGIN,                // begin   (>=1)
   CONDITIONAL,          // if      (2 or 3), cond (>=1)
   CLEAN_ENVIRONMENT,    // clean-environment(0)
-  EXIT
+  EXIT,
+  NONE
 } ;
 
 struct Token {
   string value ;
   TokenType type ;
+  PrimitiveType primitiveType ;
 } ;
 
 struct Node {
@@ -66,7 +75,7 @@ struct Node {
 struct Symbol {
   int subroutine ;
   string name ;
-  Node* valueRoot ; // record the tree root 
+  Node* binding ; // record the tree root 
   Symbol* next ;
 } ;
 
@@ -173,6 +182,14 @@ private:
     cout << "Memory dosen't enough\n" ;
   } // DIVID_ZERO_ERROR()
 
+  static void UNBOUND_SYMBOL_ERROR( string token ) {
+    cout << "ERROR (unbound symbol) : " << token << "\n" ;
+  } // UNBOUND_SYMBOL_ERROR()
+
+  static void INCORRECT_ARGUMENTS_ERROR( string token ) {
+    cout << "ERROR (incorrect number of arguments) : " << token << "\n" ;
+  } // INCORRECT_ARGUMENTS_ERROR()
+
 public:
 
   static void ErrorMessage( ErrorType type, string token ) {
@@ -184,11 +201,36 @@ public:
     else if ( type == UNDEFINEDID ) UNDEFINEDID_ERROR( token ) ;
     else if ( type == DIVID_ZERO ) DIVID_ZERO_ERROR() ;
     else if ( type == MEMORY_NOT_ENOUGH ) MEMORY_NOT_ENOUGH_ERROR() ;
+    else if ( type == UNBOUND_SYMBOL ) UNBOUND_SYMBOL_ERROR( token ) ;
+    else if ( type == INCORRECT_ARGUMENTS ) INCORRECT_ARGUMENTS_ERROR( token ) ;
   } // ErrorMessage()
 
 } ; // ErrorHadling
 
+class TokenChecker {
+  
+  public:
+  // Check whether Token is atom 
+  static bool IsAtom( Token token ) {
+    TokenType type = token.type ;
+    return ( type == SYMBOL ||
+             type == INT    ||
+             type == FLOAT  ||
+             type == STRING ||
+             type == NIL    ||
+             type == T      ) ;
+  } // IsAtom()
 
+  static bool IsAtom( TokenType type ) {
+    return ( type == SYMBOL ||
+             type == INT    ||
+             type == FLOAT  ||
+             type == STRING ||
+             type == NIL    ||
+             type == T      ) ;
+  } // IsAtom()
+
+} ; // TokenCheck
 
 /* ---------------------------DataBase------------------------------------ */
 
@@ -220,7 +262,7 @@ class SymbolTable {
   Symbol* CreateASymbol( string name, Node* head ) {
     Symbol* newSymbol = new Symbol() ;
     newSymbol->name = name ;
-    newSymbol->valueRoot = head ;
+    newSymbol->binding = head ;
     newSymbol->next = NULL ;
     return newSymbol ;
   } // CreateASymbol()
@@ -277,9 +319,29 @@ class SymbolTable {
     mSymbolTable_ = new vector<Symbol*>( MAX_MEMORY_SIZE ) ;
   } // SymbolTable()
 
+  Node* Get( string name ) {
+    int key = GetKey( name ) ;
+
+    if ( mSymbolTable_->at( key ) == NULL ) throw Exception( UNBOUND_SYMBOL, name ) ;
+
+    // Get the last symbol
+    Symbol* cur = mSymbolTable_->at( key ) ;
+    while ( cur->next != NULL ) cur = cur->next ;
+
+    return mSymbolTable_->at( key )->binding ;
+  } // Get()
+
+  // if symbol exit, return true
+  bool Find( string name ) {
+    int key = GetKey( name ) ;
+    return ( mSymbolTable_->at( key ) == NULL ) ;
+  } // Find()
+
   void Insert( string name, Node* head ) {
     int key = GetKey( name ) ;
     Symbol* cur = mSymbolTable_->at( key ) ;
+
+    // cout << name << ":" << key << endl ; // debug
 
     // check whether collision occured
     // Note: In fact it's checked in GetKey Function
@@ -293,6 +355,7 @@ class SymbolTable {
 
     // if collision and the symbol has same name
     else if ( cur->name == name ) {
+      // note: notice define repeatly problem
       // go to the last not NULL symbol
       while ( cur->next != NULL ) cur = cur->next ;
       // append the new same name symbol to last
@@ -303,6 +366,8 @@ class SymbolTable {
     else {
       throw Exception( MEMORY_NOT_ENOUGH ) ;
     } // else
+
+    // cout << "define successful!\n" ;
     
   } // Insert()
 
@@ -310,10 +375,13 @@ class SymbolTable {
   void Delete( string name ) {
 
     int key = GetKey( name ) ;
+
+    if ( mSymbolTable_->at( key ) == NULL ) return ;
+
     mSymbolTable_->at( key )->name = "\0" ;
     // free the tree memory
-    FreeUpValue( mSymbolTable_->at( key )->valueRoot ) ;
-    mSymbolTable_->at( key )->valueRoot = NULL ;
+    FreeUpValue( mSymbolTable_->at( key )->binding ) ;
+    mSymbolTable_->at( key )->binding = NULL ;
 
     // TODO next Case
   } // Delete()
@@ -321,6 +389,7 @@ class SymbolTable {
   // clear symbol table
   void Clear() {
     mSymbolTable_->clear() ;
+    mSymbolTable_ = new vector<Symbol*>( MAX_MEMORY_SIZE ) ;
   } // Clear()
 
 } ;
@@ -666,6 +735,7 @@ private:
 
     oneToken.value = mCurrent_token_ ; 
     oneToken.type = mCurrent_tokenType_ ;
+    oneToken.primitiveType = NONE ;
 
     return oneToken ;
   } // CreateToken()
@@ -1084,7 +1154,7 @@ class Tree {
 
 private:
   
-  vector<Node*> *mRoots_ ;
+  vector<Node*> *mRoots_ ; // store all of tree roots
   vector<Token> *mTokensQueue_ ;
 
   Token mCurToken_ ;
@@ -1114,11 +1184,11 @@ private:
 
   // Push token vector to queue
   void SetTokenList( vector<Token>* tokenList ) {
-
     mTokensQueue_ = PreProcessingTokenList( tokenList ) ;
-    // mTokensQueue_ = tokenList ;
+    
   } // SetTokenList()
 
+  // Dealing with format: '(...) -> (quote(...))
   vector<Token>* PreProcessingTokenList( vector<Token>* tokenList  ) {
     vector<Token> *queue = new vector<Token>() ;
     // record how many index of bracket in quote
@@ -1152,10 +1222,6 @@ private:
       } // else
     } // while
 
-    // for ( int i = 0 ; i < queue->size() ; i++ ) {
-    //   cout << queue->at(i).value << " " ;
-    // } // for
-    // cout << endl ;
     return queue ;
   
   } // PreProcessingTokenList()
@@ -1210,12 +1276,12 @@ private:
 
       // case1: ( A B C ) save left atom to node
       // case2: ( A ( B C ) D ) if meet the left bracket, create new node to connect it
-      while ( IsAtom( mCurToken_ )          ||
+      while ( TokenChecker::IsAtom( mCurToken_ )          ||
               mCurToken_.type == LEFT_PAREN ||
               mCurToken_.type == QUOTE ) {
 
         // if is atom save to left node
-        if ( IsAtom( mCurToken_ ) ) cur->left = SaveToken_with_NewNode() ;
+        if ( TokenChecker::IsAtom( mCurToken_ ) ) cur->left = SaveToken_with_NewNode() ;
         // if is subtree, save to left node
         else if ( mCurToken_.type == LEFT_PAREN ) cur->left = BuildCons() ;
         // if is qoute, save to left node
@@ -1246,7 +1312,7 @@ private:
       if ( mCurToken_.type == DOT ) {
         GetNextToken() ; // get next token
 
-        if ( IsAtom( mCurToken_ ) ) cur->right = SaveToken_with_NewNode() ;
+        if ( TokenChecker::IsAtom( mCurToken_ ) ) cur->right = SaveToken_with_NewNode() ;
         else if ( mCurToken_.type == LEFT_PAREN ) cur->right = BuildCons() ;
         GetNextToken() ; // get next token
 
@@ -1259,7 +1325,7 @@ private:
 
     } // if
     // ---------- Atom ---------- //
-    else if ( IsAtom( mCurToken_ ) ) {
+    else if ( TokenChecker::IsAtom( mCurToken_ ) ) {
       // ex. 'a ''()
       cur->content = CopyCurToken() ;
       return root ;
@@ -1281,7 +1347,8 @@ public:
   void CreateTree( vector<Token>* tokenList ) {
 
     // ---------- Initialize ---------- //
-    SetTokenList( tokenList ) ; // push tokenList in 
+    // push tokenList in and preprocess
+    SetTokenList( tokenList ) ;
     mCurSubroutine_ = 0 ;
 
     // null node in root
@@ -1310,29 +1377,438 @@ class Evaluator {
 
 private:
   
+  SymbolTable mSymbolTable_ ;
   Printer mPrinter_ ;
   vector<Token> *mCommand_ ;
+  int mLevel_ ;
+  bool mIsQuit ;
 
-  void Evaluate( Node *head, bool isCons ) {
+  // Check the tree arguments is equal to ?
+  bool IsArgCountEqualTo( Node* root, int arg_count ) {
+    Node* cur = root ;
 
-    Node *cur = head ;
+    // if arg < arg_count
+    for ( int i = 0 ; i < arg_count ; i++ ) {
+      if ( cur->left == NULL ) return false ;
+      cur = cur->right ;
+    } // for
 
-    // terminal condition
-    if ( cur == NULL ) return ;
+    // if arg > arg_count
+    // empty right node
+    if ( cur == NULL ) return true ;
+    // right node is NIL and only one
+    else if ( cur != NULL          &&
+              cur->content != NULL &&
+              cur->left == NULL    &&
+              cur->right == NULL   && 
+              cur->content->type == NIL ) return true ;
+    
+    return false ;
+  } // CheckArgCount()
 
-    if ( cur->content == NULL ) {
+  // return left node
+  Node* GetArgument( Node* cur ) {
+    return cur->left ;
+  } // GetArgument()
+
+  Node* Eval_Constructor( Node* root ) {
+
+    Node* cur = root ;
+    string function_name = cur->left->content->value ;
+
+    // Go next node
+    cur = cur->right ;
+
+    // ---------- Function: cons ---------- //
+    if ( function_name == "cons" ) {
+      if ( IsArgCountEqualTo( cur, 2 ) ) cout << "cons args error" ;
+
+      Node* first_arg = Evaluate( GetArgument( cur ) ) ;
+      Node* Scecond_arg = Evaluate( GetArgument( cur->right ) ) ;
       
-      mCommand_->push_back( SystemFunctions::CreateNewToken( "(", LEFT_PAREN ) ) ;
-      Evaluate( cur->left, true ) ;
-      Evaluate( cur->right, false ) ;
-      mCommand_->push_back( SystemFunctions::CreateNewToken( ")", RIGHT_PAREN ) ) ;
     } // if
-    else if ( cur->content->type == NIL ) return ;
+
+    // ---------- Function: list ---------- //
+    else if ( function_name == "list" ) {
+
+    } // else if
+
+  } // Eval_Constructor()
+
+  Node* Eval_Quote_Bypass( Node* root ) {
+
+  } // Eval_Quote_Bypass()
+
+  Node* Eval_Define( Node* root ) {
+
+  } // Eval_Define()
+
+  Node* Eval_Part_Accessors( Node* root ) {
+
+  } // Eval_Part_Accessors()
+
+  Node* Eval_Primitive_Predicate( Node* root ) {
+
+  } // Eval_Primitive_Predicate()
+
+  Node* Eval_Basic_Arithmetic( Node* root ) {
+
+  } // Eval_Basic_Arithmetic()
+
+  Node* Eval_Equivalence( Node* root ) {
+
+  } // Eval_Equivalence()
+
+  Node* Eval_Begin( Node* root ) {
+
+  } // Eval_Begin()
+
+  Node* Eval_Condition( Node* root ) {
+
+  } // Eval_Condition()
+
+  Node* Eval_Clean_Environment( Node* root ) {
+
+    string function_name = root->left->content->value ;
+    if ( IsArgCountEqualTo( root, 0 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+    mSymbolTable_.Clear() ;
+    
+    return NULL ;
+  } // Eval_Clean_Environment()
+
+  Node* Eval_Exit( Node* root ) {
+    string function_name = root->left->content->value ;
+    if ( IsArgCountEqualTo( root, 0 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+    mIsQuit = true ;
+    
+    return NULL ;
+  } // Eval_Exit()
+
+  Node* Evaluate( Node *root ) {
+    
+    Node *cur = root ;
+    mLevel_++ ;
+
+    if ( cur == NULL ) return NULL ;
+
+    // ---------- CASE1 Atom || Symbol ---------- //
+    // case1: Not a list
+    // root node content has a value
+    if ( cur->content != NULL ) {
+
+      // if what is being evaluated is an atom but not a symbol
+      if ( TokenChecker::IsAtom( cur->content->type ) && cur->content->type != SYMBOL ) {
+        // return that atom
+        return cur ;
+      } // if
+
+      // else if what is being evaluated is a symbol
+      else if ( cur->content->type == SYMBOL ) {
+        // check whether it is bound to an S-expression or an internal function
+        return mSymbolTable_.Get( cur->content->value ) ; // mSymbolTable automatically check unbound
+      } // else if
+    } // if
+
+    // ---------- CASE2 (...) ---------- //
+    // what is being evaluated is (...)
+    // root node content is NULL
     else {
-      mCommand_->push_back( CopyToken( cur ) ) ;
+      
+      // Check Functional Argument
+      // First argument check: if (...) is not a (pure) list
+      if ( cur->left == NULL ) throw Exception( NON_LIST ) ;
+      // First argument check: if is a list
+      else if ( cur->left->content == NULL ) cur->left = Evaluate( cur->left ) ;
+
+      Node *first_argument = root->left ;
+
+      // ---------- First Argument ---------- //
+      // First argument is not a symbol
+      if ( TokenChecker::IsAtom( first_argument->content->type ) &&
+           first_argument->content->type != SYMBOL ) throw Exception( NON_FUNCTION ) ;
+
+      // else if first argument of (...) is a symbol SYM
+      else if ( first_argument->content->type == SYMBOL ) {
+        
+        // Get Symbol Binding
+        if ( first_argument->content->primitiveType == NONE )
+          first_argument = mSymbolTable_.Get( first_argument->content->value )  ;
+
+        // check if the SYM is the name of a known function
+        CheckPrimitiveSymbol( first_argument->content ) ;
+
+        Token* functional_token = first_argument->content ;
+
+        // if the current level is not the top level, and SYM is 'clean-environment'
+        // or 'define' or　'exit'
+        if ( functional_token->primitiveType == EXIT && mLevel_ != 1 )
+          throw Exception( LEVEL_OF_EXIT ) ;
+
+        else if ( functional_token->primitiveType == DEFINE && mLevel_ != 1  )
+          throw Exception( LEVEL_OF_DEFINE ) ;
+
+        else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT &&  mLevel_ != 1  )
+          throw Exception( LEVEL_OF_CLEAN_ENVIRONMENT ) ;
+          
+        // ---------- Eval Function ---------- //
+
+        // ---------- CONSTRUCTOR ---------- //
+        if ( functional_token->primitiveType == CONSTRUCTOR ) {
+          return Eval_Constructor( cur ) ;
+
+        } // if
+
+        // ---------- QUOTE_BYPASS ---------- //
+        else if ( functional_token->primitiveType == QUOTE_BYPASS ) {
+          return Eval_Quote_Bypass( cur ) ;
+
+        } // else if
+
+        // ---------- DEFINE ---------- //
+        else if ( functional_token->primitiveType == DEFINE ) {
+          return Eval_Define( cur ) ;
+
+        } // else if
+
+        // ---------- PART_ACCESSORS ---------- //
+        else if ( functional_token->primitiveType == PART_ACCESSORS ) {
+          return Eval_Part_Accessors( cur ) ;
+
+        } // else if
+
+        // ---------- PRIMITIVE_PREDICTATE ---------- //
+        else if ( functional_token->primitiveType == PRIMITIVE_PREDICTATE ) {
+          return Eval_Primitive_Predicate( cur ) ;
+
+        } // else if
+
+        // ---------- BASIC_ARITHMETIC ---------- //
+        else if ( functional_token->primitiveType == BASIC_ARITHMETIC ) {
+          return Eval_Basic_Arithmetic( cur ) ;
+
+        } // else if
+
+        // ---------- EQUIVALENCE ---------- //
+        else if ( functional_token->primitiveType == EQUIVALENCE ) {
+          return Eval_Equivalence( cur ) ;
+
+        } // else if
+
+        // ---------- BEGIN ---------- //
+        else if ( functional_token->primitiveType == BEGIN ) {
+          return Eval_Begin( cur ) ;
+        } // else if
+
+        // ---------- CONDITIONAL ---------- //
+        else if ( functional_token->primitiveType == CONDITIONAL ) {
+          return Eval_Condition( cur ) ;
+        } // else if
+
+        // ---------- CLEAN_ENVIRONMENT ---------- //
+        else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT ) {
+          return Eval_Clean_Environment( cur ) ;
+        } // else if
+
+        // ---------- EXIT ---------- //
+        else if ( functional_token->primitiveType == EXIT ) {
+          return Eval_Exit( cur ) ;
+        } // else if
+        
+        else {}
+        
+      } // else if
+      
+
     } // else
 
+    /*
+
+      else if first argument of (...) is a symbol SYM
+
+        check whether SYM is the name of a function (i.e., check whether 「SYM has a
+                                          binding, and that binding is an internal function」)
+
+        if SYM is the name of a known function
+
+          if the current level is not the top level, and SYM is 'clean-environment' or    
+              or 'define' or　'exit'
+
+            ERROR (level of CLEAN-ENVIRONMENT) / ERROR (level of DEFINE) / ERROR (level of EXIT)
+
+          else if SYM is 'define' or 'set!' or 'let' or 'cond' or 'lambda'
+
+            check the format of this expression // 注意：此時尚未check num-of-arg
+            // (define symbol    // 注意：只能宣告或設定 非primitive的symbol (這是final decision!)
+            //         S-expression
+            // )
+            // (define ( one-or-more-symbols )
+            //           one-or-more-S-expressions
+            // )
+            // (set! symbol
+            //       S-expression
+            // )
+            // (lambda (zero-or-more-symbols)
+            //           one-or-more-S-expressions
+            // )
+            // (let (zero-or-more-PAIRs)
+            //        one-or-more-S-expressions
+            // )
+            // (cond one-or-more-AT-LEAST-DOUBLETONs
+            // )
+            // where PAIR df= ( symbol S-expression )
+            //        AT-LEAST-DOUBLETON df= a list of two or more S-expressions
+
+            if format error (包括attempting to redefine system primitive) 
+              ERROR (COND format) : <the main S-exp> 
+              or
+              ERROR (DEFINE format) : <the main S-exp> // 有可能是因為redefining primitive之故
+              or
+              ERROR (SET! format) : <the main S-exp>    // 有可能是因為redefining primitive之故
+              or
+              ERROR (LET format) : <the main S-exp>     // 有可能是因為redefining primitive之故
+              or
+              ERROR (LAMBDA format) : <the main S-exp>  // 有可能是因為redefining primitive之故
+
+            evaluate ( ... ) 
+
+            return the evaluated result (and exit this call to eval())
+
+          else if SYM is 'if' or 'and' or 'or'
+
+            check whether the number of arguments is correct
+
+            if number of arguments is NOT correct
+              ERROR (incorrect number of arguments) : if
+
+            evaluate ( ... ) 
+
+            return the evaluated result (and exit this call to eval())
+
+          else // SYM is a known function name 'abc', which is neither 
+                // 'define' nor 'let' nor 'cond' nor 'lambda'
+
+            check whether the number of arguments is correct
+
+            if number of arguments is NOT correct
+              ERROR (incorrect number of arguments) : abc
+
+        else // SYM is 'abc', which is not the name of a known function
+
+          ERROR (unbound symbol) : abc
+          or
+          ERROR (attempt to apply non-function) : ☆ // ☆ is the binding of abc
+
+      else // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
+
+        evaluate ( 。。。 )
+
+        // if any error occurs during the evaluation of ( 。。。 ), we just output an
+        // an appropriate error message, and we will not proceed any further
+
+        if no error occurs during the evaluation of ( 。。。 ) 
+
+          check whether the evaluated result (of ( 。。。 )) is an internal function
+
+          if the evaluated result (of ( 。。。 )) is an internal function
+
+            check whether the number of arguments is correct
+
+            if num-of-arguments is NOT correct
+              ERROR (incorrect number of arguments) : name-of-the-function
+              or
+              ERROR (incorrect number of arguments) : lambda expression 
+                                                            // in the case of nameless functions
+
+          else // the evaluated result (of ( 。。。 )) is not an internal function
+            ERROR (attempt to apply non-function) : ☆ //  ☆ is the evaluated result
+
+      end of 「else the first argument of ( ... ) is ( 。。。 )」
+        
+      eval the second argument S2 of (the main S-expression) ( ... )
+
+      if the type of the evaluated result is not correct 
+        ERROR (xxx with incorrect argument type) : the-evaluated-result
+        // xxx must be the name of some primitive function!
+
+      if no error
+        eval the third argument S3 of (the main S-expression) ( ... )
+
+      if the type of the evaluated result is not correct 
+        ERROR (xxx with incorrect argument type) : the-evaluated-result
+
+      ...
+
+      if no error
+
+        apply the binding of the first argument (an internal function) to S2-eval-result, 
+        S3-eval-result, ... 
+
+        if no error
+          if there is an evaluated result to be returned
+            return the evaluated result
+          else
+            ERROR (no return result) : name-of-this-function
+            or
+            ERROR (no return result) : lambda expression // if there is such a case ...
+
+    end // else what is being evaluated is (...) ; we call it the main S-expression
+
+    */
+    
   } // Evaluate()
+
+  void CheckPrimitiveSymbol( Token* token ) {
+    string name = token->value ;
+
+    // <CONSTRUCTOR> := cons list 
+    if ( name == "cons" || name == "list" ) token->primitiveType = CONSTRUCTOR ;
+
+    // <QUOTE_BYPASS> := ' quote
+    else if ( name == "\'" || name == "quote" ) token->primitiveType = QUOTE_BYPASS ;
+
+    // <DEFINE> := define
+    else if ( name == "define" ) token->primitiveType = DEFINE ;
+
+    // <PART_ACCESSORS> := car cdr
+    else if ( name == "car" || name == "cdr" ) token->primitiveType = PART_ACCESSORS ;
+
+    // <PRIMITIVE_PREDICTATE> :=
+    // atom? pair? list? null? integer? real? number? string? boolean? symbol?
+    else if ( name == "atom?"    || name == "pair?"   ||
+              name == "list?"    || name == "null?"   ||
+              name == "integer?" || name == "real?"   ||
+              name == "number?"  || name == "string?" ||
+              name == "boolean?" || name == "symbol?" ) token->primitiveType = PRIMITIVE_PREDICTATE ;
+    
+    // <BASIC_ARITHMETIC> :=
+    // + - * / and or > >= < <= = not string>? string<? string=? string-append
+    else if ( name == "+"    || name == "-"   ||
+              name == "*"    || name == "/"   ||
+              name == "and"  || name == "or"  ||
+              name == ">"    || name == ">="  ||
+              name == "<"    || name == "<="  ||
+              name == "="    || name == "not" ||
+              name == "string>?" || name == "string<?" ||
+              name == "string=?" || name == "string-append" ) token->primitiveType = BASIC_ARITHMETIC ;
+
+    // <EQUIVALENCE> := eqv? equal?
+    else if ( name == "eqv?" || name == "equal?" ) token->primitiveType = EQUIVALENCE ;
+
+    // <BEGIN> := begin
+    else if ( name == "begin" ) token->primitiveType = BEGIN ;
+
+    // <CONDITIONAL> := if cond
+    else if ( name == "if" || name == "cond"  ) token->primitiveType = CONDITIONAL ;
+
+    // <CLEAN_ENVIRONMENT> := clean-environment
+    else if ( name == "clean-environment" ) token->primitiveType = CLEAN_ENVIRONMENT ;
+
+    // <EXIT> := exit
+    else if ( name == "exit" ) token->primitiveType = EXIT ;
+
+    else throw Exception( NON_FUNCTION ) ;
+
+  } // IsPremitiveSymbol()
 
   Token CopyToken( Node* node ) {
     Token newToken ;
@@ -1345,17 +1821,24 @@ public:
 
   Evaluator() {
     mCommand_ = new vector<Token>() ;
+    mLevel_ = 0 ;
+    mIsQuit = false ;
   } // Evaluator()
 
   // Go through Right
-  void Execute( Node *root ) {
-    mCommand_->clear() ;
+  Node* Execute( Node *root ) {
 
-    Evaluate( root, true ) ;
+    // set Top Level
+    mLevel_ = 0 ;
+
+    // Evaluating
+    return Evaluate( root ) ;
 
   } // Execute()
 
   bool IsExit( const Node *temp ) {
+
+    return mIsQuit ;
 
     // empty node
     if ( temp == NULL ) return false ;
@@ -1394,8 +1877,9 @@ private:
   Tree mAtomTree_ ;
   Evaluator mEvaluator_ ;
   Printer mPrinter_ ;
+  
 
-  vector<vector<Token>*> *mTokenTable_ ; // saving primitive tokens until building tree
+  vector<vector<Token>*> *mTokenTable_ ; // storing all of primitive tokens
   bool mQuit_ ;
   bool mErrorQuit_ ;
 
@@ -1409,7 +1893,8 @@ private:
     vector<Token>* tokenList = mSyntaxAnalyzer_.SyntaxAnalyzing() ;
 
     if ( !tokenList->empty() ) {
-      mTokenTable_->push_back( tokenList ) ; // push token list into token table to record
+      // storing current tokenList to tokenTable
+      mTokenTable_->push_back( tokenList ) ;
 
       // Building A Tree
       mAtomTree_.CreateTree( tokenList ) ;
@@ -1438,10 +1923,11 @@ public:
       try {
         ReadSExp() ;
         Node *curAtomRoot = mAtomTree_.GetCurrentRoot() ;
-        // mEvaluator_.Execute( curAtomRoot ) ;
-        if ( mEvaluator_.IsExit( curAtomRoot ) ) mQuit_ = true ;
+        Node *result = mEvaluator_.Execute( curAtomRoot ) ;
+        
+        if ( mEvaluator_.IsExit( result ) ) mQuit_ = true ;
         else {
-          mPrinter_.PrettyPrint( curAtomRoot ) ; // Pretty print
+          mPrinter_.PrettyPrint( result ) ; // Pretty print
         } // else
 
       } // try
