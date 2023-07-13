@@ -125,11 +125,11 @@ class Printer {
   
 private: 
 
-  int mCurSubroutine_ ;
-  int mPrintLeftBracketCount_ ;
+  static int sCurSubroutine_ ;
+  static int sPrintLeftBracketCount_ ;
 
   // Print String to consol
-  void PrintString( const Token* strToken ) {
+  static void PrintString( const Token* strToken ) {
 
     const string STR = strToken->value ;
     const int SIZE = STR.size() ;
@@ -169,7 +169,7 @@ private:
   } // PrintString()
 
   // Print Float to consol
-  void PrintFloat( const Token* pointToken ) {
+  static void PrintFloat( const Token* pointToken ) {
     
     string buffer = pointToken->value ;
 
@@ -189,7 +189,7 @@ private:
   } // PrintFloat()
 
   // Print Int to consol
-  void PrintInt( const Token* strToken ) {
+  static void PrintInt( const Token* strToken ) {
     const string INTEGER = strToken->value ;
     int startingPos = 0 ;
 
@@ -205,7 +205,7 @@ private:
 
   // Check whether the DS is ( 1 . 2 ) format
   // Paired only has on right node event thought is cons
-  bool IsPaired( Node *head ) {
+  static bool IsPaired( Node *head ) {
     return ( head->content        == NULL && 
              head->left           != NULL && 
              head->right          != NULL && 
@@ -213,47 +213,47 @@ private:
              head->right->content->type != NIL ) ;
   } // IsPaired()
 
-  bool IsBoolean( Node *head ) {
+  static bool IsBoolean( Node *head ) {
     return ( head->content->type == NIL || head->content->type == T ) ;
   } // IsBoolean()
 
-  string CombineLeftBracket() {
+  static string CombineLeftBracket() {
     string buffer ;
-    while ( mPrintLeftBracketCount_ > 0 ) {
+    while ( sPrintLeftBracketCount_ > 0 ) {
       buffer += "( " ; 
-      mPrintLeftBracketCount_-- ;
+      sPrintLeftBracketCount_-- ;
     } // while
 
     return buffer ;
   } // CombineLeftBracket()
 
-  void SetFormat() {
-    // cout << "subroutine: " << " (" << mCurSubroutine_ << ") " << endl ; // DEBUG
-    if ( mPrintLeftBracketCount_ > 0 ) {
-      cout << right << setw( mCurSubroutine_*2 ) << CombineLeftBracket() ;
+  static void SetFormat() {
+    // cout << "subroutine: " << " (" << sCurSubroutine_ << ") " << endl ; // DEBUG
+    if ( sPrintLeftBracketCount_ > 0 ) {
+      cout << right << setw( sCurSubroutine_*2 ) << CombineLeftBracket() ;
     } // if
-    else if ( mCurSubroutine_ > 0 ) {
-      cout << right << setw( mCurSubroutine_*2 ) << " " ;
+    else if ( sCurSubroutine_ > 0 ) {
+      cout << right << setw( sCurSubroutine_*2 ) << " " ;
     } // else if
 
   } // SetFormat()
 
-  void PrintRightBracket() {
-    if ( mCurSubroutine_ > 0 ) cout << right << setw( mCurSubroutine_*2 ) << " " ;
+  static void PrintRightBracket() {
+    if ( sCurSubroutine_ > 0 ) cout << right << setw( sCurSubroutine_*2 ) << " " ;
     cout << ")" << endl ;
   } // PrintRightBracket()
 
-  void ConsBegin() {
-    mPrintLeftBracketCount_++ ;
-    mCurSubroutine_++ ;
+  static void ConsBegin() {
+    sPrintLeftBracketCount_++ ;
+    sCurSubroutine_++ ;
   } // ConsBegin()
 
-  void ConsEnd() {
-    mCurSubroutine_-- ;
+  static void ConsEnd() {
+    sCurSubroutine_-- ;
     PrintRightBracket() ;
   } // ConsEnd()
 
-  void PrintNodeToken( Node *temp ) {
+  static void PrintNodeToken( Node *temp ) {
     if ( temp->content->type == STRING ) PrintString( temp->content ) ;
     else if ( temp->content->type == FLOAT ) PrintFloat( temp->content ) ;
     else if ( temp->content->type == INT ) PrintInt( temp->content ) ;
@@ -262,7 +262,7 @@ private:
   } // PrintNodeToken()
 
   // Traversal and print all node
-  void TraversalTree( Node *head, bool isCons ) {
+  static void TraversalTree( Node *head, bool isCons ) {
     
     Node *cur = head ;
 
@@ -305,9 +305,9 @@ private:
 
 public:
 
-  void PrettyPrint( Node *head ) {
-    mPrintLeftBracketCount_ = 0 ;
-    mCurSubroutine_ = 0 ;
+  static void PrettyPrint( Node *head ) {
+    sPrintLeftBracketCount_ = 0 ;
+    sCurSubroutine_ = 0 ;
 
     // Traversal
     TraversalTree( head, true ) ;
@@ -315,7 +315,7 @@ public:
   } // PrettyPrint()
 
   // used to debug
-  void PrintConstruct( Node *head ) {
+  static void PrintConstruct( Node *head ) {
     Node *cur = head ;
     if ( cur == NULL ) {
       cout << "null" << endl ;
@@ -333,7 +333,7 @@ public:
 
   } // PrintConstruct()
 
-  void PrintVector( vector<Token> *tokenList ) {
+  static void PrintVector( vector<Token> *tokenList ) {
     for ( int i = 0 ; i < tokenList->size() ; i++ ) {
       cout << tokenList->at( i ).value << " " ;
       cout << tokenList->at( i ).value << " " ;
@@ -344,6 +344,9 @@ public:
 
 } ; // Printer
 
+  // Initialize
+  int Printer::sCurSubroutine_ = 0 ;
+  int Printer::sPrintLeftBracketCount_ = 0;
 
 // ---------------------------Exception---------------------------------- //
 
@@ -380,7 +383,6 @@ public:
 class ErrorHadling {
 
 private:
-  Printer mPrettyPrinter_ ;
 
   static void NO_MORE_INPUT_ERROR() {
     cout << "ERROR (no more input) : END-OF-FILE encountered\n" ;
@@ -426,25 +428,26 @@ private:
     cout << "ERROR (unbound symbol) : " << token << "\n" ;
   } // UNBOUND_SYMBOL_ERROR()
 
-  static void NON_LIST_ERROR( string token ) {
+  static void NON_LIST_ERROR( Node* root ) {
     cout << "ERROR (non-list) : " ;
+    Printer::PrettyPrint( root ) ;
     
   } // NON_LIST_ERROR()
 
   static void NON_FUNCTION_ERROR( string token ) {
-    cout << "ERROR (incorrect number of arguments) : " << token << "\n" ;
+    cout << "ERROR (attempt to apply non-function) : " << token << "\n" ;
   } // NON_FUNCTION_ERROR()
   
-  static void LEVEL_OF_EXIT_ERROR( string token ) {
-    cout << "ERROR (incorrect number of arguments) : " << token << "\n" ;
+  static void LEVEL_OF_EXIT_ERROR() {
+    cout << "ERROR (level of EXIT)\n" ;
   } // LEVEL_OF_EXIT_ERROR()
 
-  static void LEVEL_OF_DEFINE_ERROR( string token ) {
-    cout << "ERROR (incorrect number of arguments) : " << token << "\n" ;
+  static void LEVEL_OF_DEFINE_ERROR() {
+    cout << "ERROR (level of DEFINE)\n" ;
   } // LEVEL_OF_DEFINE_ERROR()
 
-  static void LEVEL_OF_CLEAN_ENVIRONMENT_ERROR( string token ) {
-    cout << "ERROR (incorrect number of arguments) : " << token << "\n" ;
+  static void LEVEL_OF_CLEAN_ENVIRONMENT_ERROR() {
+    cout << "ERROR (level of CLEAN-ENVIRONMENT)\n" ;
   } // LEVEL_OF_CLEAN_ENVIRONMENT_ERROR()
 
   static void INCORRECT_ARGUMENTS_ERROR( string token ) {
@@ -463,11 +466,11 @@ public:
     else if ( type == DIVID_ZERO ) DIVID_ZERO_ERROR() ;
     else if ( type == MEMORY_NOT_ENOUGH ) MEMORY_NOT_ENOUGH_ERROR() ;
     else if ( type == UNBOUND_SYMBOL ) UNBOUND_SYMBOL_ERROR( token ) ;
-    else if ( type == NON_LIST ) NON_LIST_ERROR( token ) ;
+    else if ( type == NON_LIST ) NON_LIST_ERROR( root ) ;
     else if ( type == NON_FUNCTION ) NON_FUNCTION_ERROR( token ) ;
-    else if ( type == LEVEL_OF_EXIT ) LEVEL_OF_EXIT_ERROR( token ) ;
-    else if ( type == LEVEL_OF_DEFINE ) LEVEL_OF_DEFINE_ERROR( token ) ;
-    else if ( type == LEVEL_OF_CLEAN_ENVIRONMENT ) LEVEL_OF_CLEAN_ENVIRONMENT_ERROR( token ) ;
+    else if ( type == LEVEL_OF_EXIT ) LEVEL_OF_EXIT_ERROR() ;
+    else if ( type == LEVEL_OF_DEFINE ) LEVEL_OF_DEFINE_ERROR() ;
+    else if ( type == LEVEL_OF_CLEAN_ENVIRONMENT ) LEVEL_OF_CLEAN_ENVIRONMENT_ERROR() ;
     else if ( type == INCORRECT_ARGUMENTS ) INCORRECT_ARGUMENTS_ERROR( token ) ;
 
   } // ErrorMessage()
@@ -1291,6 +1294,7 @@ private:
     Token* newToken = new Token() ;
     newToken->type = mCurToken_.type ;
     newToken->value = mCurToken_.value ;
+    newToken->primitiveType = mCurToken_.primitiveType ;
     return newToken ;
   } // CopyCurToken()
 
@@ -1420,7 +1424,6 @@ class Evaluator {
 private:
   
   SymbolTable mSymbolTable_ ;
-  Printer mPrinter_ ;
   vector<Token> *mCommand_ ;
   int mLevel_ ;
   bool mIsQuit ;
@@ -1463,50 +1466,87 @@ private:
 
     // ---------- Function: cons ---------- //
     if ( function_name == "cons" ) {
-      if ( IsArgCountEqualTo( cur, 2 ) ) cout << "cons args error" ;
+      if ( ! IsArgCountEqualTo( cur, 2 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
 
       Node* first_arg = Evaluate( GetArgument( cur ) ) ;
-      Node* Scecond_arg = Evaluate( GetArgument( cur->right ) ) ;
+      Node* scecond_arg = Evaluate( GetArgument( cur->right ) ) ;
+
+      // Paired Node
+      root->left = first_arg ;
+      root->right = scecond_arg ;
+
+      return root ;
       
     } // if
 
     // ---------- Function: list ---------- //
     else if ( function_name == "list" ) {
+      
+      Node* result = root->right ;
+      if ( result == NULL ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+      // TODO
+      while( GetArgument( cur ) != NULL ) {
+        Node* arg = Evaluate( GetArgument(cur) ) ;
+        cur = cur->right ;
+      } // while
 
     } // else if
 
+    return cur ;
   } // Eval_Constructor()
 
   Node* Eval_Quote_Bypass( Node* root ) {
 
+    Node* cur = root ;
+    string function_name = cur->left->content->value ;
+    // if ( function_name != "quote" ) throw Exception(  )
+
+    // Go next node
+    cur = cur->right ;
+
+    if ( function_name == "quote" || function_name == "\'" ) {
+      if ( ! IsArgCountEqualTo( cur, 1 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+      Node* first_arg = GetArgument( cur ) ;
+
+      return first_arg ;
+    } // if
+
+    return NULL ;
   } // Eval_Quote_Bypass()
 
   Node* Eval_Define( Node* root ) {
-
+    cout << "define processing!\n" ;
+    return root ;
   } // Eval_Define()
 
   Node* Eval_Part_Accessors( Node* root ) {
-
+    cout << "part accessors processing!\n" ;
+    return root ;
   } // Eval_Part_Accessors()
 
   Node* Eval_Primitive_Predicate( Node* root ) {
-
+    cout << "primitive predicate processing!\n" ;
+    return root ;
   } // Eval_Primitive_Predicate()
 
   Node* Eval_Basic_Arithmetic( Node* root ) {
-
+    cout << "basic arithmetic processing!\n" ;
+    return root ;
   } // Eval_Basic_Arithmetic()
 
   Node* Eval_Equivalence( Node* root ) {
-
+    cout << "equivalence processing!\n" ;
+    return root ;
   } // Eval_Equivalence()
 
   Node* Eval_Begin( Node* root ) {
-
+    cout << "begin processing!\n" ;
+    return root ;
   } // Eval_Begin()
 
   Node* Eval_Condition( Node* root ) {
-
+    cout << "condition processing!\n" ;
+    return root ;
   } // Eval_Condition()
 
   Node* Eval_Clean_Environment( Node* root ) {
@@ -1515,6 +1555,7 @@ private:
     if ( ! IsArgCountEqualTo( root->right, 0 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
     mSymbolTable_.Clear() ;
     
+    cout << "environment cleaned\n" ;
     return NULL ;
   } // Eval_Clean_Environment()
 
@@ -1567,17 +1608,21 @@ private:
       // ---------- First Argument ---------- //
       // First argument is not a symbol
       if ( TokenChecker::IsAtom( first_argument->content->type ) &&
-           first_argument->content->type != SYMBOL ) throw Exception( NON_FUNCTION ) ;
-
+           first_argument->content->type != SYMBOL ) 
+        throw Exception( NON_FUNCTION, first_argument->content->value ) ;
+      
       // else if first argument of (...) is a symbol SYM
-      else if ( first_argument->content->type == SYMBOL ) {
-        
-        // Get Symbol Binding
-        if ( first_argument->content->primitiveType == NONE )
-          first_argument = mSymbolTable_.Get( first_argument->content->value )  ;
+      else if ( first_argument->content->type == SYMBOL || first_argument->content->type == QUOTE ) {
 
         // check if the SYM is the name of a known function
         CheckPrimitiveSymbol( first_argument->content ) ;
+
+        // Get Symbol Binding
+        if ( first_argument->content->primitiveType == NONE ) {
+          first_argument = mSymbolTable_.Get( first_argument->content->value )  ;
+          // check if the SYM is the name of a known function
+          CheckPrimitiveSymbol( first_argument->content ) ;
+        } // if
 
         Token* functional_token = first_argument->content ;
 
@@ -1592,18 +1637,16 @@ private:
         else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT &&  mLevel_ != 1  )
           throw Exception( LEVEL_OF_CLEAN_ENVIRONMENT ) ;
           
+          
         // ---------- Eval Function ---------- //
-
         // ---------- CONSTRUCTOR ---------- //
         if ( functional_token->primitiveType == CONSTRUCTOR ) {
           return Eval_Constructor( cur ) ;
-
         } // if
 
         // ---------- QUOTE_BYPASS ---------- //
         else if ( functional_token->primitiveType == QUOTE_BYPASS ) {
           return Eval_Quote_Bypass( cur ) ;
-
         } // else if
 
         // ---------- DEFINE ---------- //
@@ -1660,9 +1703,9 @@ private:
         
       } // else if
       
-
     } // else
 
+    return cur ;
     /*
 
       else if first argument of (...) is a symbol SYM
@@ -1848,7 +1891,6 @@ private:
     // <EXIT> := exit
     else if ( name == "exit" ) token->primitiveType = EXIT ;
 
-    else throw Exception( NON_FUNCTION ) ;
 
   } // IsPremitiveSymbol()
 
@@ -1918,8 +1960,6 @@ private:
   SemanticsAnalyzer mSemanticsAnalyzer_ ;
   Tree mAtomTree_ ;
   Evaluator mEvaluator_ ;
-  Printer mPrinter_ ;
-  
 
   vector<vector<Token>*> *mTokenTable_ ; // storing all of primitive tokens
   bool mQuit_ ;
@@ -1936,7 +1976,7 @@ private:
 
     if ( !tokenList->empty() ) {
       // storing current tokenList to tokenTable
-      mTokenTable_->push_back( tokenList ) ;
+      mTokenTable_->push_back( tokenList ) ; // TOFIX: Current tokeList overriding
 
       // Building A Tree
       mAtomTree_.CreateTree( tokenList ) ;
@@ -1962,15 +2002,28 @@ public:
 
       cout << "> " ;
       
+      // lexical and syntax error handling
       try {
         ReadSExp() ;
         Node *curAtomRoot = mAtomTree_.GetCurrentRoot() ;
-        Node *result = mEvaluator_.Execute( curAtomRoot ) ;
-        
-        if ( mEvaluator_.IsExit( result ) ) mQuit_ = true ;
-        else {
-          mPrinter_.PrettyPrint( result ) ; // Pretty print
-        } // else
+
+        // evaluate and sematic error handling
+        try {
+
+          // Execute Evaluate
+          Node *result = mEvaluator_.Execute( curAtomRoot ) ;
+
+          // Check if is exit
+          if ( mEvaluator_.IsExit( result ) ) mQuit_ = true ;
+          else Printer::PrettyPrint( result ) ; // Pretty print
+
+        } // try
+        catch ( const Exception& e ) {
+
+          ErrorHadling::ErrorMessage( e.mErrorType_, e.mCurrentToken_, e.mCurrentNode_ ) ;
+          gLineNum = 1 ;
+          gColumn = 0 ; // while read the first char, col will add 1 automatically
+        } // catch
 
       } // try
       catch ( const Exception& e ) {
@@ -1978,8 +2031,6 @@ public:
         ErrorHadling::ErrorMessage( e.mErrorType_, e.mCurrentToken_, e.mCurrentNode_ ) ;
         if ( e.mErrorType_ == NO_MORE_INPUT ) mErrorQuit_ = true ;
         else mSyntaxAnalyzer_.ClearRestOfCharInThisLine() ;
-
-        // cout << "hi" ;
         
         gLineNum = 1 ;
         gColumn = 0 ; // while read the first char, col will add 1 automatically
