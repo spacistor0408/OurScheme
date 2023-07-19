@@ -168,9 +168,73 @@ public:
     return newToken ; 
   } // CreateNewToken()
 
+  static Node* CreateNode( string name, TokenType type ) {
+    Token* token = new Token() ;
+    Node* node = new Node() ;
+    node->content = token ;
+    node->content->value = name ;
+    node->content->type = type ;
+    node->content->primitiveType = NONE ;
+    node->left = NULL ;
+    node->right = NULL ;
+    node->isConsBegin = false ;
+    node->subroutineNum = 1 ;
+    node->address = gAddress ;
+
+    gAddress++ ;
+
+    return node ;
+  } // CreateNode() ;
 } ; // SystemFunctions
 
+class TokenChecker {
+  
+  public:
+  // Check whether Token is atom 
+  static bool IsAtom( Token token ) {
+    TokenType type = token.type ;
+    return ( type == SYMBOL ||
+             type == INT    ||
+             type == FLOAT  ||
+             type == STRING ||
+             type == NIL    ||
+             type == T      ) ;
+  } // IsAtom()
 
+  static bool IsAtom( TokenType type ) {
+    return ( type == SYMBOL ||
+             type == INT    ||
+             type == FLOAT  ||
+             type == STRING ||
+             type == NIL    ||
+             type == T      ) ;
+  } // IsAtom()
+
+  static bool IsReserveWord( string name ) {
+    return ( name == "cons"     || name == "list"    ||
+             name == "quote"    || name == "define"  ||
+             name == "car"      || name == "cdr"     ||
+             name == "atom?"    || name == "pair?"   ||
+             name == "list?"    || name == "null?"   ||
+             name == "integer?" || name == "real?"   ||
+             name == "number?"  || name == "string?" ||
+             name == "boolean?" || name == "symbol?" ||
+             name == "+"    || name == "-"   ||
+             name == "*"    || name == "/"   ||
+             name == "and"  || name == "or"  ||
+             name == ">"    || name == ">="  ||
+             name == "<"    || name == "<="  ||
+             name == "="    || name == "not" ||
+             name == "string>?" || name == "string<?"      ||
+             name == "string=?" || name == "string-append" ||
+             name == "eqv?"     || name == "equal?"        ||
+             name == "begin"    || 
+             name == "if"       || name == "cond" ||
+             name == "clean-environment"          ||
+             name == "exit" ) ;
+  } // IsReserveWord()
+
+} ; // TokenCheck
 
 // ---------------------------Printer---------------------------------- //
 
@@ -255,6 +319,11 @@ private:
     cout << endl ;
 
   } // PrintInt()
+
+  static void PrintReserveWordBinding( string name ) {
+    string binding = "#<procedure " + name + ">" ;
+    cout << binding << endl ;
+  } // PrintReserveWordBinding()
 
   // Check whether the DS is ( 1 . 2 ) format
   // Paired only has on right node event thought is cons
@@ -570,55 +639,6 @@ public:
 } ; // ErrorHadling
 
 
-class TokenChecker {
-  
-  public:
-  // Check whether Token is atom 
-  static bool IsAtom( Token token ) {
-    TokenType type = token.type ;
-    return ( type == SYMBOL ||
-             type == INT    ||
-             type == FLOAT  ||
-             type == STRING ||
-             type == NIL    ||
-             type == T      ) ;
-  } // IsAtom()
-
-  static bool IsAtom( TokenType type ) {
-    return ( type == SYMBOL ||
-             type == INT    ||
-             type == FLOAT  ||
-             type == STRING ||
-             type == NIL    ||
-             type == T      ) ;
-  } // IsAtom()
-
-  static bool IsReserveWord( string name ) {
-    return ( name == "cons"     || name == "list"    ||
-             name == "quote"    || name == "define"  ||
-             name == "car"      || name == "cdr"     ||
-             name == "atom?"    || name == "pair?"   ||
-             name == "list?"    || name == "null?"   ||
-             name == "integer?" || name == "real?"   ||
-             name == "number?"  || name == "string?" ||
-             name == "boolean?" || name == "symbol?" ||
-             name == "+"    || name == "-"   ||
-             name == "*"    || name == "/"   ||
-             name == "and"  || name == "or"  ||
-             name == ">"    || name == ">="  ||
-             name == "<"    || name == "<="  ||
-             name == "="    || name == "not" ||
-             name == "string>?" || name == "string<?"      ||
-             name == "string=?" || name == "string-append" ||
-             name == "eqv?"     || name == "equal?"        ||
-             name == "begin"    || 
-             name == "if"       || name == "cond" ||
-             name == "clean-environment"          ||
-             name == "exit" ) ;
-  } // IsReserveWord()
-
-} ; // TokenCheck
-
 // ---------------------------DataBase------------------------------------ //
 
 class Hash {
@@ -701,12 +721,21 @@ class SymbolTable {
 
   } // FreeUpValue()
 
+  Node* GetReserveWordBinding( string name ) {
+    string binding ;
+    binding = "#<procedure " + name + ">" ;
+    return SystemFunctions::CreateNode( binding, SYMBOL ) ;
+  } // GetReserveWordBinding()
+
   public:
   SymbolTable() {
     mSymbolTable_ = new vector<Symbol*>( MAX_MEMORY_SIZE ) ;
   } // SymbolTable()
 
   Node* Get( string name ) {
+    if ( TokenChecker::IsReserveWord( name ) )
+      return SystemFunctions::CreateNode( name, SYMBOL ) ;
+
     int key = GetKey( name ) ;
 
     if ( mSymbolTable_->at( key ) == NULL ) throw Exception( UNBOUND_SYMBOL, name ) ;
@@ -1693,30 +1722,7 @@ private:
   vector<Token> *mCommand_ ;
   int mLevel_ ;
   bool mIsQuit ;
-
-  // Check the tree arguments is equal to ?
-  bool IsArgCountEqualTo( Node* root, int arg_count ) {
-    Node* cur = root ;
-
-    // if arg < arg_count
-    for ( int i = 0 ; i < arg_count ; i++ ) {
-      if ( cur == NULL || cur->left == NULL ) return false ;
-      cur = cur->right ;
-    } // for
-
-    // if arg > arg_count
-    // empty right node
-    if ( cur == NULL ) return true ;
-    // right node is NIL and only one
-    else if ( cur != NULL          &&
-              cur->content != NULL &&
-              cur->left == NULL    &&
-              cur->right == NULL   && 
-              cur->content->type == NIL ) return true ;
-    
-    return false ;
-  } // IsArgCountEqualTo()
-
+  
   Node* CreateNode( string name, TokenType type ) {
     Token* token = new Token() ;
     Node* node = new Node() ;
@@ -1987,6 +1993,8 @@ private:
            first_arg->content->type != STRING &&
            second_arg->content->type != STRING )
         return CreateNode( "#t", T ) ;
+
+      if ( first_arg->address == second_arg->address ) return CreateNode( "#t", T ) ;
     } // if
 
     // case2: ( eqv? a a ) same memory space
@@ -2128,7 +2136,8 @@ private:
     if ( function_name == "cons" ) {
 
       // check arguments count
-      if ( ! IsArgCountEqualTo( cur, 2 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+      if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 2 ) )
+        throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
 
       Node* first_arg = Evaluate( GetArgument( cur ) ) ;
       Node* scecond_arg = Evaluate( GetArgument( cur->right ) ) ;
@@ -2173,7 +2182,8 @@ private:
     cur = cur->right ;
 
     if ( function_name == "quote" || function_name == "\'" ) {
-      if ( ! IsArgCountEqualTo( cur, 1 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+      if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 1 ) )
+        throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
       Node* first_arg = GetArgument( cur ) ;
 
       return first_arg ;
@@ -2196,7 +2206,8 @@ private:
     // Paired tree constructure: ( define a . 5 ) case
     if ( cur->right != NULL && cur->right->content != NULL ) throw Exception( NON_LIST, root ) ;
     // check arguments count and is no NULL
-    if ( ! IsArgCountEqualTo( cur, 2 ) ) throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
+    if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 2 ) ) 
+      throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
 
     Node* first_arg = GetArgument( cur ) ;
     // check if define name has wrong format or naming 
@@ -2207,11 +2218,14 @@ private:
       throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
 
 
-    // ---------- step2: define ---------- //
-    Node* scecond_arg = Evaluate( GetArgument( cur->right ) ) ;
-
-    mSymbolTable_.Insert( first_arg->content->value, scecond_arg ) ;
-
+    // ---------- step2: binding ---------- //
+    Node* second_arg = GetArgument( cur->right ) ;
+    // if ( second_arg->content != NULL && TokenChecker::IsReserveWord( second_arg->content->value ) )
+    //   second_arg = GetArgument( cur->right ) ;
+    // else 
+    second_arg = Evaluate( GetArgument( cur->right ) ) ;
+    mSymbolTable_.Insert( first_arg->content->value, second_arg ) ;
+    
     cout << first_arg->content->value << " defined\n" ;
     return NULL ;
   } // Eval_Define()
@@ -2226,7 +2240,9 @@ private:
 
     // check arguments count
     if ( cur->right != NULL && cur->right->content != NULL ) throw Exception( NON_LIST, root ) ;
-    else if ( ! IsArgCountEqualTo( cur, 1 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+    // Semantics Analyze argument count
+    else if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 1 ) ) 
+      throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
     
     Node* result = Evaluate( GetArgument( cur ) ) ;
     if ( result->content != NULL ) 
@@ -2255,7 +2271,9 @@ private:
     cur = cur->right ;
     Node* first_arg = Evaluate( GetArgument( cur ) ) ;
 
-    if ( ! IsArgCountEqualTo( cur, 1 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+    // Semantics Analyze argument count
+    if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 1 ) )
+      throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
 
     // ---------- Function: atom? ---------- //
     if ( function_name == "atom?" ) {
@@ -2364,7 +2382,8 @@ private:
     // Go next node: first bypass argument
     cur = cur->right ;
 
-    if ( ! IsArgCountEqualTo( cur, 2 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+    if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 2 ) )
+      throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
     
     // ---------- Function: eqv? ---------- //
     if ( function_name == "eqv?" ) {
@@ -2423,7 +2442,8 @@ private:
   Node* Eval_Clean_Environment( Node* root ) {
 
     string function_name = root->left->content->value ;
-    if ( ! IsArgCountEqualTo( root->right, 0 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+    if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( root->right, 0 ) )
+      throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
     mSymbolTable_.Clear() ;
     
     cout << "environment cleaned\n" ;
@@ -2433,7 +2453,8 @@ private:
   // exit(0)
   Node* Eval_Exit( Node* root ) {
     string function_name = root->left->content->value ;
-    if ( ! IsArgCountEqualTo( root->right, 0 ) ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+    if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( root->right, 0 ) )
+      throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
     mIsQuit = true ;
     
     return NULL ;
@@ -2461,7 +2482,10 @@ private:
       // else if what is being evaluated is a symbol
       else if ( cur->content->type == SYMBOL ) {
         // check whether it is bound to an S-expression or an internal function
-        return mSymbolTable_.Get( cur->content->value ) ; // mSymbolTable automatically check unbound
+        Node* binding = mSymbolTable_.Get( cur->content->value ) ;
+        // if ( binding->content != NULL && TokenChecker::IsReserveWord( binding->content->value ) )
+        //   return mSymbolTable_.Get( binding->content->value ) ;
+        return binding ; // mSymbolTable automatically check unbound
       } // else if
     } // if
 
@@ -2492,13 +2516,15 @@ private:
 
         // Get Symbol Binding
         if ( first_argument->content->primitiveType == NONE ) {
-          first_argument = mSymbolTable_.Get( first_argument->content->value )  ;
+          cur->left = mSymbolTable_.Get( first_argument->content->value ) ;
+          first_argument = cur->left ;
           // check if the SYM is the name of a known function
           CheckPrimitiveSymbol( first_argument->content ) ;
           if ( first_argument->content->primitiveType == NONE )
             throw Exception( NON_FUNCTION, first_argument->content->value ) ;
         } // if
 
+        // cout << first_argument->content->primitiveType ;
         Token* functional_token = first_argument->content ;
 
         // if the current level is not the top level, and SYM is 'clean-environment'
