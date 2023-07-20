@@ -534,42 +534,42 @@ class Exception {
 
 public:
   ErrorType mErrorType_ ;
-  string mfunc_name_ ;
-  string mCurToken_ ;
+  string mToken_name_ ;
+  Token* mCurToken_ ;
   Node* mCurNode_ ;
 
   Exception( ErrorType errorType ) {
     mErrorType_ = errorType ;
-    mfunc_name_ = "\0" ;
-    mCurToken_ = "\0" ;
+    mToken_name_ = "\0" ;
+    mCurToken_ = NULL ;
     mCurNode_ = NULL ;
   } // Exception()
 
-  Exception( ErrorType errorType, string& token ) {
+  Exception( ErrorType errorType, string& token_name ) {
     mErrorType_ = errorType ;
-    mfunc_name_ = "\0" ;
+    mToken_name_ = token_name ;
+    mCurToken_ = NULL ;
+    mCurNode_ = NULL ;
+  } // Exception()
+
+  Exception( ErrorType errorType, string& token_name, Token* token ) {
+    mErrorType_ = errorType ;
+    mToken_name_ = token_name ;
     mCurToken_ = token ;
     mCurNode_ = NULL ;
   } // Exception()
 
-  Exception( ErrorType errorType, string& func_name, string& token ) {
+  Exception( ErrorType errorType, string& token_name, Node* root ) {
     mErrorType_ = errorType ;
-    mfunc_name_ = func_name ;
-    mCurToken_ = token ;
-    mCurNode_ = NULL ;
-  } // Exception()
-
-  Exception( ErrorType errorType, string& func_name, Node* root ) {
-    mErrorType_ = errorType ;
-    mfunc_name_ = func_name ;
-    mCurToken_ = "\0" ;
+    mToken_name_ = token_name ;
+    mCurToken_ = NULL ;
     mCurNode_ = root ;
   } // Exception()
 
   Exception( ErrorType errorType, Node* root ) {
     mErrorType_ = errorType ;
-    mfunc_name_ = "\0" ;
-    mCurToken_ = "\0" ;
+    mToken_name_ = "\0" ;
+    mCurToken_ = NULL ;
     mCurNode_ = root ;
   } // Exception()
 
@@ -582,9 +582,9 @@ class ErrorHadling {
 
 private:
 
-  static void PrintErrorToken( string token ) {
-    if ( SystemFunctions::IsFloat( token ) ) Printer::PrintFloat( token ) ;
-    else cout << token << endl ;
+  static void PrintErrorToken( Token* token ) {
+    if ( token->type == FLOAT ) Printer::PrintFloat( token->value ) ;
+    else cout << token->value << endl ;
   } // PrintErrorToken()
 
   static void NO_MORE_INPUT_ERROR() {
@@ -644,9 +644,9 @@ private:
     
   } // NON_LIST_ERROR()
 
-  static void NON_FUNCTION_ERROR( string token, Node* root ) {
+  static void NON_FUNCTION_ERROR( Token* token, Node* root ) {
     cout << "ERROR (attempt to apply non-function) : " ; 
-    if ( token != "\0" ) PrintErrorToken( token ) ;
+    if ( token->value != "\0" ) PrintErrorToken( token ) ;
     else Printer::PrettyPrint( root ) ;
   } // NON_FUNCTION_ERROR()
   
@@ -672,9 +672,9 @@ private:
     Printer::PrettyPrint( root ) ;
   } // INCORRECT_DEFINE_FORMAT_ERROR()
 
-  static void INCORRECT_ARGUMENT_TYPE_ERROR( string func_name, string token, Node* root ) {
+  static void INCORRECT_ARGUMENT_TYPE_ERROR( string func_name, Token* token, Node* root ) {
     cout << "ERROR (" << func_name << " with incorrect argument type) : " ;
-    if ( token != "\0" ) PrintErrorToken( token ) ;
+    if ( token->value != "\0" ) PrintErrorToken( token ) ;
     else Printer::PrettyPrint( root ) ;
   } // INCORRECT_ARGUMENT_TYPE_ERROR()
 
@@ -700,28 +700,28 @@ private:
 
 public:
 
-  static void ErrorMessage( ErrorType type, string func_name, string token, Node* root ) {
+  static void ErrorMessage( ErrorType type, string token_name, Token* token, Node* root ) {
     if ( type == NO_MORE_INPUT ) NO_MORE_INPUT_ERROR() ;
     else if ( type == NO_CLOSING_QUOTE ) NO_CLOSING_QOUTE_ERROR() ;
-    else if ( type == UNRECOGNIZED_TOKEN ) UNRECOGNIZED_TOKEN_ERROR( token ) ;
-    else if ( type == UNEXPECTED_TOKEN ) UNEXPECTED_TOKEN_ERROR( token ) ;
-    else if ( type == UNEXPECTED_RIGHTBRACKET_TOKEN ) UNEXPECTED_RIGHTBRACKET_TOKEN_ERROR( token ) ;
-    else if ( type == UNDEFINEDID ) UNDEFINEDID_ERROR( token ) ;
+    else if ( type == UNRECOGNIZED_TOKEN ) UNRECOGNIZED_TOKEN_ERROR( token_name ) ;
+    else if ( type == UNEXPECTED_TOKEN ) UNEXPECTED_TOKEN_ERROR( token_name ) ;
+    else if ( type == UNEXPECTED_RIGHTBRACKET_TOKEN ) UNEXPECTED_RIGHTBRACKET_TOKEN_ERROR( token_name ) ;
+    else if ( type == UNDEFINEDID ) UNDEFINEDID_ERROR( token_name ) ;
     else if ( type == DIVID_ZERO ) DIVID_ZERO_ERROR() ;
     else if ( type == MEMORY_NOT_ENOUGH ) MEMORY_NOT_ENOUGH_ERROR() ;
-    else if ( type == UNBOUND_SYMBOL ) UNBOUND_SYMBOL_ERROR( token ) ;
+    else if ( type == UNBOUND_SYMBOL ) UNBOUND_SYMBOL_ERROR( token_name ) ;
     else if ( type == NON_LIST ) NON_LIST_ERROR( root ) ;
     else if ( type == NON_FUNCTION ) NON_FUNCTION_ERROR( token, root ) ;
     else if ( type == LEVEL_OF_EXIT ) LEVEL_OF_EXIT_ERROR() ;
     else if ( type == LEVEL_OF_DEFINE ) LEVEL_OF_DEFINE_ERROR() ;
     else if ( type == LEVEL_OF_CLEAN_ENVIRONMENT ) LEVEL_OF_CLEAN_ENVIRONMENT_ERROR() ;
-    else if ( type == INCORRECT_ARGUMENTS ) INCORRECT_ARGUMENTS_ERROR( token ) ;
+    else if ( type == INCORRECT_ARGUMENTS ) INCORRECT_ARGUMENTS_ERROR( token_name ) ;
     else if ( type == INCORRECT_DEFINE_FORMAT ) INCORRECT_DEFINE_FORMAT_ERROR( root ) ;
-    else if ( type == INCORRECT_ARGUMENT_TYPE ) INCORRECT_ARGUMENT_TYPE_ERROR( func_name, token, root ) ;
+    else if ( type == INCORRECT_ARGUMENT_TYPE ) INCORRECT_ARGUMENT_TYPE_ERROR( token_name, token, root ) ;
     else if ( type == INCORRECT_COND_FORMAT ) INCORRECT_COND_FORMAT_ERROR( root ) ;
     else if ( type == INCORRECT_LIST_FORMAT ) INCORRECT_LIST_FORMAT_ERROR( root ) ;
     else if ( type == NO_RETURN_VALUE ) NO_RETURN_VALUE_ERROR( root ) ;
-    else if ( type == TESTING ) TESTING_ERROR( token ) ;
+    else if ( type == TESTING ) TESTING_ERROR( token_name ) ;
 
   } // ErrorMessage()
 
@@ -1488,14 +1488,13 @@ private:
 
 public:
 
-
   void Check_Basic_Arthmatic_Argument( string function_name, Node* argument ) {
     // Check if there still has list, even though s-expression had expanded
     if ( argument->content == NULL )
       throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument ) ;
     // Cehck Type is Correct
     else if ( ! IsCorrectArithmeticType( argument->content->type ) )
-      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument->content->value ) ;
+      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument->content ) ;
   } // Check_Basic_Arthmatic_Argument()
 
   void Check_Divid_Zero( string function_name, Node* argument ) {
@@ -1514,7 +1513,7 @@ public:
       throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument ) ;
     // Cehck Type is Correct
     else if ( ! IsCorrectStringType( argument->content->type ) )
-      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument->content->value ) ;
+      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument->content ) ;
   } // Check_Basic_String_Argument()
 
   void Check_Basic_Boolean_Argument( string function_name, Node* argument ) {
@@ -2385,8 +2384,9 @@ private:
     
     Node* result = Evaluate( GetArgument( first_arg ) ) ;
     
+    // Not a List or Pared, can't part access
     if ( result->content != NULL ) 
-      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, result->content->value ) ;
+      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, result->content ) ;
 
     // ---------- Function: car ---------- //
     if ( function_name == "car" ) {
@@ -2646,8 +2646,8 @@ private:
     // what is being evaluated is (...)
     // root node content is NULL
     else {
-      
-      // Check Functional Argument
+
+      // ---------- Basic Check First Argument ---------- //
       // First argument check: if (...) is not a (pure) list
       if ( root->left == NULL ) throw Exception( NON_LIST ) ;
       // Pared Case
@@ -2662,17 +2662,21 @@ private:
       // If function node has nothing
       if ( first_argument->content == NULL ) throw Exception( NON_FUNCTION, first_argument ) ;
 
-      // ---------- First Argument ---------- //
+      // ---------- First Argument: NOT SYMBOL ---------- //
       // First argument is not a symbol
       if ( TokenChecker::IsAtom( first_argument->content->type ) &&
            first_argument->content->type != SYMBOL ) 
         throw Exception( NON_FUNCTION, first_argument->content->value ) ;
       
+      // ---------- First Argument: SYMBOL ---------- //
       // else if first argument of (...) is a symbol SYM
       else if ( first_argument->content->type == SYMBOL || first_argument->content->type == QUOTE ) {
+        
 
         // check if the SYM is the name of a known function
         CheckPrimitiveSymbol( first_argument->content ) ;
+        
+        cout << first_argument->content->value ;
 
         // Get Symbol Binding
         if ( first_argument->content->primitiveType == NONE ) {
@@ -2685,7 +2689,7 @@ private:
             throw Exception( NON_FUNCTION, first_argument->content->value ) ;
         } // if
 
-        // cout << first_argument->content->primitiveType ;
+        
         Token* functional_token = first_argument->content ;
 
         // if the current level is not the top level, and SYM is 'clean-environment'
@@ -2765,6 +2769,162 @@ private:
       } // else if
       
     } // else
+
+
+    /*
+      if what is being evaluated is an atom but not a symbol
+
+        return that atom
+        
+      else if what is being evaluated is a symbol 
+
+        check whether it is bound to an S-expression or an internal function
+
+        if unbound
+          ERROR (unbound symbol) : abc
+        else 
+          return that S-expression or internal function (i.e., its binding)
+
+      else // what is being evaluated is (...) ; we call it the main S-expression below
+           // this (...) cannot be nil (nil is an atom)
+
+        if (...) is not a (pure) list
+          ERROR (non-list) : (...)  // (...)要pretty print
+
+        else if first argument of (...) is an atom ☆, which is not a symbol
+          ERROR (attempt to apply non-function) : ☆
+
+        else if first argument of (...) is a symbol SYM
+
+          check whether SYM is the name of a function (i.e., check whether 「SYM has a
+                                            binding, and that binding is an internal function」)
+
+          if SYM is the name of a known function
+
+            if the current level is not the top level, and SYM is 'clean-environment' or    
+                or 'define' or　'exit'
+
+              ERROR (level of CLEAN-ENVIRONMENT) / ERROR (level of DEFINE) / ERROR (level of EXIT)
+
+            else if SYM is 'define' or 'set!' or 'let' or 'cond' or 'lambda'
+
+              check the format of this expression // 注意：此時尚未check num-of-arg
+              // (define symbol    // 注意：只能宣告或設定 非primitive的symbol (這是final decision!)
+              //         S-expression
+              // )
+              // (define ( one-or-more-symbols )
+              //           one-or-more-S-expressions
+              // )
+              // (set! symbol
+              //       S-expression
+              // )
+              // (lambda (zero-or-more-symbols)
+              //           one-or-more-S-expressions
+              // )
+              // (let (zero-or-more-PAIRs)
+              //        one-or-more-S-expressions
+              // )
+              // (cond one-or-more-AT-LEAST-DOUBLETONs
+              // )
+              // where PAIR df= ( symbol S-expression )
+              //        AT-LEAST-DOUBLETON df= a list of two or more S-expressions
+
+              if format error (包括attempting to redefine system primitive) 
+                ERROR (COND format) : <the main S-exp> 
+                or
+                ERROR (DEFINE format) : <the main S-exp> // 有可能是因為redefining primitive之故
+                or
+                ERROR (SET! format) : <the main S-exp>    // 有可能是因為redefining primitive之故
+                or
+                ERROR (LET format) : <the main S-exp>     // 有可能是因為redefining primitive之故
+                or
+                ERROR (LAMBDA format) : <the main S-exp>  // 有可能是因為redefining primitive之故
+
+              evaluate ( ... ) 
+
+              return the evaluated result (and exit this call to eval())
+
+            else if SYM is 'if' or 'and' or 'or'
+
+              check whether the number of arguments is correct
+
+              if number of arguments is NOT correct
+                ERROR (incorrect number of arguments) : if
+
+              evaluate ( ... ) 
+
+              return the evaluated result (and exit this call to eval())
+
+            else // SYM is a known function name 'abc', which is neither 
+                  // 'define' nor 'let' nor 'cond' nor 'lambda'
+
+              check whether the number of arguments is correct
+
+              if number of arguments is NOT correct
+                ERROR (incorrect number of arguments) : abc
+
+          else // SYM is 'abc', which is not the name of a known function
+
+            ERROR (unbound symbol) : abc
+            or
+            ERROR (attempt to apply non-function) : ☆ // ☆ is the binding of abc
+
+        else // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
+
+          evaluate ( 。。。 )
+
+          // if any error occurs during the evaluation of ( 。。。 ), we just output an
+          // an appropriate error message, and we will not proceed any further
+
+          if no error occurs during the evaluation of ( 。。。 ) 
+
+            check whether the evaluated result (of ( 。。。 )) is an internal function
+
+            if the evaluated result (of ( 。。。 )) is an internal function
+
+              check whether the number of arguments is correct
+
+              if num-of-arguments is NOT correct
+                ERROR (incorrect number of arguments) : name-of-the-function
+                or
+                ERROR (incorrect number of arguments) : lambda expression 
+                                                              // in the case of nameless functions
+
+            else // the evaluated result (of ( 。。。 )) is not an internal function
+              ERROR (attempt to apply non-function) : ☆ //  ☆ is the evaluated result
+
+        end of 「else the first argument of ( ... ) is ( 。。。 )」
+          
+        eval the second argument S2 of (the main S-expression) ( ... )
+
+        if the type of the evaluated result is not correct 
+          ERROR (xxx with incorrect argument type) : the-evaluated-result
+          // xxx must be the name of some primitive function!
+
+        if no error
+          eval the third argument S3 of (the main S-expression) ( ... )
+
+        if the type of the evaluated result is not correct 
+          ERROR (xxx with incorrect argument type) : the-evaluated-result
+
+        ...
+
+        if no error
+
+          apply the binding of the first argument (an internal function) to S2-eval-result, 
+          S3-eval-result, ... 
+
+          if no error
+            if there is an evaluated result to be returned
+              return the evaluated result
+            else
+              ERROR (no return result) : name-of-this-function
+              or
+              ERROR (no return result) : lambda expression // if there is such a case ...
+
+      end // else what is being evaluated is (...) ; we call it the main S-expression
+
+     */
 
     return NULL ;
     
@@ -2896,7 +3056,6 @@ class OurScheme {
 private:
 
   Parser mSyntaxAnalyzer_ ;
-  SemanticsAnalyzer mSemanticsAnalyzer_ ;
   Tree mAtomTree_ ;
   Evaluator mEvaluator_ ;
 
@@ -2959,7 +3118,7 @@ public:
         } // try
         catch ( const Exception& e ) {
 
-          ErrorHadling::ErrorMessage( e.mErrorType_, e.mfunc_name_, e.mCurToken_, e.mCurNode_ ) ;
+          ErrorHadling::ErrorMessage( e.mErrorType_, e.mToken_name_, e.mCurToken_, e.mCurNode_ ) ;
           gLineNum = 1 ;
           gColumn = 0 ; // while read the first char, col will add 1 automatically
         } // catch
@@ -2967,7 +3126,7 @@ public:
       } // try
       catch ( const Exception& e ) {
         
-        ErrorHadling::ErrorMessage( e.mErrorType_, e.mfunc_name_, e.mCurToken_, e.mCurNode_ ) ;
+        ErrorHadling::ErrorMessage( e.mErrorType_, e.mToken_name_, e.mCurToken_, e.mCurNode_ ) ;
         if ( e.mErrorType_ == NO_MORE_INPUT ) mErrorQuit_ = true ;
         else mSyntaxAnalyzer_.ClearRestOfCharInThisLine() ;
         
