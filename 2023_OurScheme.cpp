@@ -43,6 +43,7 @@ enum ErrorType {
   INCORRECT_DEFINE_FORMAT,
   INCORRECT_ARGUMENT_TYPE,
   INCORRECT_COND_FORMAT,
+  INCORRECT_LIST_FORMAT,
   NO_RETURN_VALUE,
   TESTING
   
@@ -160,6 +161,15 @@ public:
     return ( ch >= '0' && ch <= '9' ) ;
   } // IsDigit()
 
+  static bool IsFloat( string str ) {
+    if ( str.size() < 2 ) return false ;
+    for ( int i = 0 ; i < str.size() ; i++ ) {
+      if ( str[i] == '.' ) return true ;
+    } // for
+    
+    return false ;
+  } // IsFloat()
+
   static Token CreateNewToken( string value, TokenType type ) {
     Token newToken ;
     newToken.value = value ;
@@ -185,6 +195,35 @@ public:
 
     return node ;
   } // CreateNode() ;
+
+  static Node* CreateNode() {
+
+    Node* node = new Node() ;
+    node->content = NULL ;
+    node->left = NULL ;
+    node->right = NULL ;
+    node->isConsBegin = false ;
+    node->subroutineNum = 1 ;
+    node->address = gAddress ;
+
+    gAddress++ ;
+
+    return node ;
+  } // CreateNode() ;
+
+  static Node* Go_Next_Node_And_Create( Node* cur ) {
+    cur->right = CreateNode() ;
+    return cur->right ;
+  } // Go_Next_Node_And_Create()
+
+  // From #<procedure +> Get +
+  static string GetFunctName( string procedureFunct ) {
+    if ( procedureFunct.size() < 14 ) return "\0" ;
+    string funct = procedureFunct.erase( 0, 12 ) ;
+    funct = funct.erase( funct.size()-1, 1 ) ;
+    return funct ;
+  } // GetFunctName()
+
 } ; // SystemFunctions
 
 class TokenChecker {
@@ -212,7 +251,8 @@ class TokenChecker {
 
   static bool IsReserveWord( string name ) {
     return ( name == "cons"     || name == "list"    ||
-             name == "quote"    || name == "define"  ||
+             name == "quote"    || name == "\'"      || 
+             name == "define"   ||
              name == "car"      || name == "cdr"     ||
              name == "atom?"    || name == "pair?"   ||
              name == "list?"    || name == "null?"   ||
@@ -436,6 +476,24 @@ public:
 
   } // PrettyPrint()
 
+   // Print Float to consol
+  static void PrintFloat( string buffer ) {
+
+    // Sign bit
+    if ( buffer[0] == '+' ) {
+      buffer.erase( buffer.begin() ) ;
+    } // if
+    else if ( buffer[0] == '-' ) {
+      cout << '-' ;
+      buffer.erase( buffer.begin() ) ;
+    } // else if
+
+    cout << fixed << setprecision( 3 )
+         << round( atof( buffer.c_str() )*1000 )/1000
+         << endl ;
+
+  } // PrintFloat()
+
   // used to debug
   static void PrintConstruct( Node *head ) {
     Node *cur = head ;
@@ -501,6 +559,13 @@ public:
     mCurNode_ = NULL ;
   } // Exception()
 
+  Exception( ErrorType errorType, string& func_name, Node* root ) {
+    mErrorType_ = errorType ;
+    mfunc_name_ = func_name ;
+    mCurToken_ = "\0" ;
+    mCurNode_ = root ;
+  } // Exception()
+
   Exception( ErrorType errorType, Node* root ) {
     mErrorType_ = errorType ;
     mfunc_name_ = "\0" ;
@@ -517,6 +582,11 @@ class ErrorHadling {
 
 private:
 
+  static void PrintErrorToken( string token ) {
+    if ( SystemFunctions::IsFloat( token ) ) Printer::PrintFloat( token ) ;
+    else cout << token << endl ;
+  } // PrintErrorToken()
+
   static void NO_MORE_INPUT_ERROR() {
     cout << "ERROR (no more input) : END-OF-FILE encountered\n" ;
   } // NO_MORE_INPUT_ERROR()
@@ -528,29 +598,35 @@ private:
   } // NO_CLOSING_QOUTE_ERROR()
 
   static void UNRECOGNIZED_TOKEN_ERROR( string token ) {
-    cout << "Unrecognized token with first char : " << token << "\n" ;
+    cout << "Unrecognized token with first char : " ;
+    cout << token << endl ;
   } // UNRECOGNIZED_TOKEN_ERROR()
 
   static void UNEXPECTED_TOKEN_ERROR( string token ) {
     cout << "ERROR (unexpected token) :" 
          << " atom or '(' expected when token at Line " << gLineNum
          << " Column " << gColumn
-         << " is >>" << token << "<<\n" ;
+         << " is >>" ;
+    cout << token ;
+    cout << "<<\n" ;
   } // UNEXPECTED_TOKEN_ERROR()
 
   static void UNEXPECTED_RIGHTBRACKET_TOKEN_ERROR( string token ) {
     cout << "ERROR (unexpected token) :" 
          << " ')' expected when token at Line " << gLineNum
          << " Column " << gColumn
-         << " is >>" << token << "<<\n" ;
+         << " is >>" ;
+    cout << token ;
+    cout << "<<\n" ;
   } // UNEXPECTED_RIGHTBRACKET_TOKEN_ERROR()
 
   static void UNDEFINEDID_ERROR( string token ) {
-    cout << "Undefined identifier :'" << token << "\n" ;
+    cout << "Undefined identifier :'" ;
+    cout << token << endl ;
   } // UNDEFINEDID_ERROR()
 
-  static void DIVID_ZERO_ERROR( string token ) {
-    cout << "ERROR (division by zero) : " << token << "\n" ;
+  static void DIVID_ZERO_ERROR() {
+    cout << "ERROR (division by zero) : /\n" ;
   } // DIVID_ZERO_ERROR()
 
   static void MEMORY_NOT_ENOUGH_ERROR() {
@@ -558,7 +634,8 @@ private:
   } // MEMORY_NOT_ENOUGH_ERROR()
 
   static void UNBOUND_SYMBOL_ERROR( string token ) {
-    cout << "ERROR (unbound symbol) : " << token << "\n" ;
+    cout << "ERROR (unbound symbol) : " ;
+    cout << token << endl ;
   } // UNBOUND_SYMBOL_ERROR()
 
   static void NON_LIST_ERROR( Node* root ) {
@@ -567,8 +644,10 @@ private:
     
   } // NON_LIST_ERROR()
 
-  static void NON_FUNCTION_ERROR( string token ) {
-    cout << "ERROR (attempt to apply non-function) : " << token << "\n" ;
+  static void NON_FUNCTION_ERROR( string token, Node* root ) {
+    cout << "ERROR (attempt to apply non-function) : " ; 
+    if ( token != "\0" ) PrintErrorToken( token ) ;
+    else Printer::PrettyPrint( root ) ;
   } // NON_FUNCTION_ERROR()
   
   static void LEVEL_OF_EXIT_ERROR() {
@@ -584,7 +663,8 @@ private:
   } // LEVEL_OF_CLEAN_ENVIRONMENT_ERROR()
 
   static void INCORRECT_ARGUMENTS_ERROR( string token ) {
-    cout << "ERROR (incorrect number of arguments) : " << token << "\n" ;
+    cout << "ERROR (incorrect number of arguments) : " ;
+    cout << token << endl ;
   } // INCORRECT_ARGUMENTS_ERROR()
 
   static void INCORRECT_DEFINE_FORMAT_ERROR( Node* root ) {
@@ -592,22 +672,30 @@ private:
     Printer::PrettyPrint( root ) ;
   } // INCORRECT_DEFINE_FORMAT_ERROR()
 
-  static void INCORRECT_ARGUMENT_TYPE_ERROR( string func_name, string token ) {
-    cout << "ERROR (" << func_name << " with incorrect argument type) : " << token << "\n" ;
+  static void INCORRECT_ARGUMENT_TYPE_ERROR( string func_name, string token, Node* root ) {
+    cout << "ERROR (" << func_name << " with incorrect argument type) : " ;
+    if ( token != "\0" ) PrintErrorToken( token ) ;
+    else Printer::PrettyPrint( root ) ;
   } // INCORRECT_ARGUMENT_TYPE_ERROR()
-
-  static void NO_RETURN_VALUE_ERROR( Node* root ) {
-    cout << "ERROR (no return value) : " ;
-    Printer::PrettyPrint( root ) ;
-  } // NO_RETURN_VALUE_ERROR()
 
   static void INCORRECT_COND_FORMAT_ERROR( Node* root ) {
     cout << "ERROR (COND format) : " ;
     Printer::PrettyPrint( root ) ;
   } // INCORRECT_COND_FORMAT_ERROR()
 
+  static void INCORRECT_LIST_FORMAT_ERROR( Node* root ) {
+    cout << "ERROR (LIST format) : " ;
+    Printer::PrettyPrint( root ) ;
+  } // INCORRECT_LIST_FORMAT_ERROR()
+
+  static void NO_RETURN_VALUE_ERROR( Node* root ) {
+    cout << "ERROR (no return value) : " ;
+    Printer::PrettyPrint( root ) ;
+  } // NO_RETURN_VALUE_ERROR()
+
   static void TESTING_ERROR( string token ) {
-    cout << "Testing bug with token : " << token << "\n" ;
+    cout << "Testing bug with token : " ;
+    cout << token << endl ;
   } // TESTING_ERROR()
 
 public:
@@ -619,19 +707,20 @@ public:
     else if ( type == UNEXPECTED_TOKEN ) UNEXPECTED_TOKEN_ERROR( token ) ;
     else if ( type == UNEXPECTED_RIGHTBRACKET_TOKEN ) UNEXPECTED_RIGHTBRACKET_TOKEN_ERROR( token ) ;
     else if ( type == UNDEFINEDID ) UNDEFINEDID_ERROR( token ) ;
-    else if ( type == DIVID_ZERO ) DIVID_ZERO_ERROR( token ) ;
+    else if ( type == DIVID_ZERO ) DIVID_ZERO_ERROR() ;
     else if ( type == MEMORY_NOT_ENOUGH ) MEMORY_NOT_ENOUGH_ERROR() ;
     else if ( type == UNBOUND_SYMBOL ) UNBOUND_SYMBOL_ERROR( token ) ;
     else if ( type == NON_LIST ) NON_LIST_ERROR( root ) ;
-    else if ( type == NON_FUNCTION ) NON_FUNCTION_ERROR( token ) ;
+    else if ( type == NON_FUNCTION ) NON_FUNCTION_ERROR( token, root ) ;
     else if ( type == LEVEL_OF_EXIT ) LEVEL_OF_EXIT_ERROR() ;
     else if ( type == LEVEL_OF_DEFINE ) LEVEL_OF_DEFINE_ERROR() ;
     else if ( type == LEVEL_OF_CLEAN_ENVIRONMENT ) LEVEL_OF_CLEAN_ENVIRONMENT_ERROR() ;
     else if ( type == INCORRECT_ARGUMENTS ) INCORRECT_ARGUMENTS_ERROR( token ) ;
     else if ( type == INCORRECT_DEFINE_FORMAT ) INCORRECT_DEFINE_FORMAT_ERROR( root ) ;
-    else if ( type == INCORRECT_ARGUMENT_TYPE ) INCORRECT_ARGUMENT_TYPE_ERROR( func_name, token ) ;
-    else if ( type == NO_RETURN_VALUE ) NO_RETURN_VALUE_ERROR( root ) ;
+    else if ( type == INCORRECT_ARGUMENT_TYPE ) INCORRECT_ARGUMENT_TYPE_ERROR( func_name, token, root ) ;
     else if ( type == INCORRECT_COND_FORMAT ) INCORRECT_COND_FORMAT_ERROR( root ) ;
+    else if ( type == INCORRECT_LIST_FORMAT ) INCORRECT_LIST_FORMAT_ERROR( root ) ;
+    else if ( type == NO_RETURN_VALUE ) NO_RETURN_VALUE_ERROR( root ) ;
     else if ( type == TESTING ) TESTING_ERROR( token ) ;
 
   } // ErrorMessage()
@@ -655,6 +744,7 @@ class Hash {
   } // Eval_Key()
 
 } ; // Hash
+
 
 // ---------------------------Symbol Table------------------------------------ //
 /**
@@ -723,8 +813,10 @@ class SymbolTable {
 
   Node* GetReserveWordBinding( string name ) {
     string binding ;
+    TokenType type = SYMBOL ;
+    if ( name == "\'" || name == "quote" ) type = QUOTE ;
     binding = "#<procedure " + name + ">" ;
-    return SystemFunctions::CreateNode( binding, SYMBOL ) ;
+    return SystemFunctions::CreateNode( binding, type ) ;
   } // GetReserveWordBinding()
 
   public:
@@ -733,8 +825,10 @@ class SymbolTable {
   } // SymbolTable()
 
   Node* Get( string name ) {
+
+    // Return Reserved word binding
     if ( TokenChecker::IsReserveWord( name ) )
-      return SystemFunctions::CreateNode( name, SYMBOL ) ;
+      return GetReserveWordBinding( name ) ;
 
     int key = GetKey( name ) ;
 
@@ -809,6 +903,7 @@ class SymbolTable {
   } // Clear()
 
 } ;
+
 
 // ---------------------------Processing Stage--------------------------- //
 // ---------------------------Reader------------------------------------- //
@@ -1354,16 +1449,26 @@ private:
              op == "string=?" ) ;
   } // IsBasicStringOperator()
 
+  bool IsCorrectArithmeticType( TokenType arg_type ) {
+    return ( arg_type == INT || arg_type == FLOAT ) ;
+  } // IsCorrectArithmeticType()
+
+  bool IsCorrectStringType( TokenType arg_type ) {
+    return ( arg_type == STRING ) ;
+  } // IsCorrectStringType()
+
   int Get_count( Node* root ) {
     Node* cur = root ;
     int count = 0 ;
 
-    while ( cur != NULL ) {
-      if ( cur->left == NULL ) throw Exception( TESTING ) ;
+    while ( cur != NULL && cur->content == NULL ) {
       count++ ;
       cur = cur->right ;
     } // while 
 
+    // Pared node not nil
+    // if ( cur != NULL && cur->content != NULL && cur->content->type != NIL ) 
+    //   throw Exception( TESTING ) ;
     return count ;
 
   } // Get_count()
@@ -1383,65 +1488,95 @@ private:
 
 public:
 
-  Node* ArithmeticCheck( Node* root ) {
+  void ArithmeticCheck( string function_name, Node* result_root, Node* root ) {
 
-    Node* cur = root ;
-    string arithmetic_Operator = cur->left->content->value ;
+    Node* cur = result_root ;
+    string arithmetic_Operator = function_name ;
 
     int operandCount = 0 ;
-    bool hasInt = false ;
-    bool hasFloat = false ;
-    bool hasString = false ;
 
     // if there is no argument
-    if ( cur->right == NULL ) throw Exception( INCORRECT_ARGUMENTS, arithmetic_Operator ) ;
+    if ( cur == NULL ) throw Exception( INCORRECT_ARGUMENTS, arithmetic_Operator ) ;
 
-    // Through all nodes: check bypass argument
-    while ( cur->right != NULL && cur->right->content == NULL ) {
-      // Go to next parameter
-      cur = cur->right ;
+    // Through all nodes without Pared: check bypass argument 
+    while ( cur != NULL && cur->content == NULL ) {
       operandCount++ ;
 
       // Get the operand
       Node* opnd = cur->left ;
-      if ( opnd == NULL ) throw Exception( TESTING, arithmetic_Operator ) ;
-      // else if ( opnd->content == NULL ) throw Exception( TESTING, arithmetic_Operator ) ;
+      // opnd is a list
+      if ( opnd == NULL ) throw Exception( INCORRECT_ARGUMENT_TYPE, arithmetic_Operator, opnd ) ;
+      // Check there still has list, even though s-expression had expanded
+      else if ( opnd->content == NULL && arithmetic_Operator != "not" )
+        throw Exception( INCORRECT_ARGUMENT_TYPE, arithmetic_Operator, opnd ) ;
       
-      // Recording arguments type and check Divide Zero ERROR
-      if ( opnd->content != NULL ) {
-        if ( opnd->content->type == INT ) hasInt = true ;
-        else if ( opnd->content->type == FLOAT ) hasFloat = true ;
-        else if ( opnd->content->type == STRING ) hasString = true ;
 
-        // if divid zero
-        if ( arithmetic_Operator == "/" &&
-             operandCount > 1           &&
-             opnd->content->value == "0" ) throw Exception( DIVID_ZERO, arithmetic_Operator ) ; 
-
-      } // if
+      // if divid zero
+      if ( opnd->content != NULL      &&
+           arithmetic_Operator == "/" &&
+           operandCount > 1           &&
+           opnd->content->value == "0" ) throw Exception( DIVID_ZERO, arithmetic_Operator ) ; 
 
       // Check if operand type correct?
-      if ( IsBasicArithmeticOperator( arithmetic_Operator ) && hasString )
-        throw Exception( INCORRECT_ARGUMENT_TYPE, arithmetic_Operator, opnd->content->value ) ;
-      else if ( IsBasicStringOperator( arithmetic_Operator ) ) {
-        if ( hasInt || hasFloat ) 
+      if ( IsBasicArithmeticOperator( arithmetic_Operator ) ) {
+        if ( ! IsCorrectArithmeticType( opnd->content->type ) )
           throw Exception( INCORRECT_ARGUMENT_TYPE, arithmetic_Operator, opnd->content->value ) ;
-      } // else if
+      } // if: can only have INT FLOAT
+      else if ( IsBasicStringOperator( arithmetic_Operator ) ) {
+        if ( ! IsCorrectStringType( opnd->content->type ) )
+          throw Exception( INCORRECT_ARGUMENT_TYPE, arithmetic_Operator, opnd->content->value ) ;
+      } // else if: can only have STRING
+
+      // Go to next parameter
+      cur = cur->right ;
 
     } // while 
     
-    if ( cur->right != NULL && cur->right->content != NULL ) throw Exception( NON_LIST, root ) ;
-
-    // check if not has only one parameter
-    if ( arithmetic_Operator == "not" && operandCount > 1 ) 
-      throw Exception( INCORRECT_ARGUMENTS, arithmetic_Operator ) ;
-    else if ( arithmetic_Operator != "not" && operandCount < 2 )
-      throw Exception( INCORRECT_ARGUMENTS, arithmetic_Operator ) ;
-    
-
-    return root ;
+    // Check paired list
+    if ( cur != NULL && cur->content != NULL ) throw Exception( NON_LIST, root ) ;
 
   } // ArithmeticCheck()
+
+  void Check_Basic_Arthmatic_Argument( string function_name, Node* argument ) {
+    // Check if there still has list, even though s-expression had expanded
+    if ( argument->content == NULL )
+      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument ) ;
+    // Cehck Type is Correct
+    else if ( ! IsCorrectArithmeticType( argument->content->type ) )
+      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument->content->value ) ;
+  } // Check_Basic_Arthmatic_Argument()
+
+  void Check_Divid_Zero( string function_name, Node* argument ) {
+    // Check if divid zero
+    if ( argument->content->value == "0" && function_name == "/" ) 
+      throw Exception( DIVID_ZERO ) ;
+  } // Check_Divid_Zero()
+
+  void Check_Basic_Comparing_Argument( string function_name, Node* argument ) {
+    Check_Basic_Arthmatic_Argument( function_name, argument ) ;
+  } // Check_Basic_Comparing_Argument()
+
+  void Check_Basic_String_Argument( string function_name, Node* argument ) {
+    // Check if there still has list, even though s-expression had expanded
+    if ( argument->content == NULL )
+      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument ) ;
+    // Cehck Type is Correct
+    else if ( ! IsCorrectStringType( argument->content->type ) )
+      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument->content->value ) ;
+  } // Check_Basic_String_Argument()
+
+  void Check_Basic_Boolean_Argument( string function_name, Node* argument ) {
+    // Check if there still has list, even though s-expression had expanded
+    if ( argument->content == NULL && function_name != "not" )
+      throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument ) ;
+  } // Check_Basic_Boolean_Argument()
+
+
+  void Check_No_Pared( Node* root ) {
+    Node* cur = root ;
+    while ( cur->right != NULL ) cur = cur->right ;
+    if ( cur != NULL && cur->content != NULL ) throw Exception( NON_LIST, root ) ;
+  } // Check_No_Pared()
 
   // Check the tree arguments is equal to ?
   bool Check_ArgCount_Equal_To( Node* arg_root, int count ) {
@@ -1475,7 +1610,9 @@ public:
       if ( cond_root == NULL ) throw Exception( INCORRECT_COND_FORMAT, root ) ;
       else if ( cond_root->content != NULL || cond_root->left == NULL )
         throw Exception( INCORRECT_COND_FORMAT, root ) ;
-      
+      // if condition only has one argument
+      else if ( cond_root->right == NULL ) throw Exception( INCORRECT_COND_FORMAT, root ) ;
+
       if ( ! IsCondListFormatCorrect( cond_root ) )
         throw Exception( INCORRECT_COND_FORMAT, root ) ;
       
@@ -1722,7 +1859,7 @@ private:
   vector<Token> *mCommand_ ;
   int mLevel_ ;
   bool mIsQuit ;
-  
+
   Node* CreateNode( string name, TokenType type ) {
     Token* token = new Token() ;
     Node* node = new Node() ;
@@ -1803,28 +1940,41 @@ private:
     return ( type == SYMBOL ) ;
   } // IsSymbol()
 
-  Node* BasicArithmaticCalculate( string opnd, Node* arg_root ) {
+  // Evaluate: + - * /
+  Node* BasicArithmaticCalculate( string op, Node* arg_root ) {
 
     // root only have parameters, not including function name
     Node* cur = arg_root ;
+    Node* eval_argument = Evaluate( GetArgument( arg_root ) ) ;
+    // Semantics Analyzing
+    mSemanticsAnalyzer_.Check_Basic_Arthmatic_Argument( op, eval_argument ) ;
 
     // Get the first number
-    float result = SystemFunctions::To_float( cur->left->content->value ) ;
-    TokenType type = INT ;
-    if ( cur->left->content->type == FLOAT ) type = FLOAT ; 
+    float result = SystemFunctions::To_float( eval_argument->content->value ) ;
 
-    // Continue to get next number
+    // Type Check
+    TokenType type = INT ;
+    if ( eval_argument->content->type == FLOAT ) type = FLOAT ;
+
+    // Continue to get next number ( started with second argument )
     while ( cur->right != NULL ) {
       cur = cur->right ;
 
-      // Check Type
-      if ( cur->left->content->type == FLOAT ) type = FLOAT ;
+      // Get next evaluated argument
+      eval_argument = Evaluate( GetArgument( cur ) ) ;
+
+      // Semantics Analyzing
+      mSemanticsAnalyzer_.Check_Basic_Arthmatic_Argument( op, eval_argument ) ;
+      mSemanticsAnalyzer_.Check_Divid_Zero( op, eval_argument ) ;
+      
+      // Check Type is Float or Int
+      if ( eval_argument->content->type == FLOAT ) type = FLOAT ;
 
       // Calculating
-      if ( opnd == "+" ) result += SystemFunctions::To_float( cur->left->content->value ) ;
-      else if ( opnd == "-" ) result -= SystemFunctions::To_float( cur->left->content->value ) ;
-      else if ( opnd == "*" ) result *= SystemFunctions::To_float( cur->left->content->value ) ;
-      else if ( opnd == "/" ) result /= SystemFunctions::To_float( cur->left->content->value ) ;
+      if ( op == "+" ) result += SystemFunctions::To_float( eval_argument->content->value ) ;
+      else if ( op == "-" ) result -= SystemFunctions::To_float( eval_argument->content->value ) ;
+      else if ( op == "*" ) result *= SystemFunctions::To_float( eval_argument->content->value ) ;
+      else if ( op == "/" ) result /= SystemFunctions::To_float( eval_argument->content->value ) ;
       
     } // while
 
@@ -1833,37 +1983,46 @@ private:
     return CreateNode( SystemFunctions::To_string( result ), type ) ;
   } // BasicArithmaticCalculate()
 
-  Node* BasicComparing( string opnd, Node* root ) {
+  // Evaluate: > >= < <= =
+  Node* BasicComparing( string op, Node* arg_root ) {
 
     // root only have parameters, not including function name
-    Node* cur = root ;
+    Node* cur = arg_root ;
+    Node* eval_argument = Evaluate( GetArgument( arg_root ) ) ;
+    mSemanticsAnalyzer_.Check_Basic_Comparing_Argument( op, eval_argument ) ;
 
     // Get the first number
-    float comparingNum = SystemFunctions::To_float( cur->left->content->value ) ;
+    float comparingNum = SystemFunctions::To_float( eval_argument->content->value ) ;
     TokenType type = T ;
 
-    // Continue to get next number
+    // Continue to get next number ( started with second argument )
     while ( cur->right != NULL ) {
       cur = cur->right ;
-      float argument = SystemFunctions::To_float( cur->left->content->value ) ;
+
+      // Get next evaluated argument
+      eval_argument = Evaluate( GetArgument( cur ) ) ;
+      mSemanticsAnalyzer_.Check_Basic_Comparing_Argument( op, eval_argument ) ;
+
+      float argument = SystemFunctions::To_float( eval_argument->content->value ) ;
       
       // Calculating
-      if ( opnd == ">" ) {
+      if ( op == ">" ) {
         if ( comparingNum <= argument ) type = NIL ;
       } // if
-      else if ( opnd == ">=" ) {
+      else if ( op == ">=" ) {
         if ( comparingNum < argument ) type = NIL ;
       } // else if
-      else if ( opnd == "<" ) {
+      else if ( op == "<" ) {
         if ( comparingNum >= argument ) type = NIL ;
       } // else if
-      else if ( opnd == "<=" ) {
+      else if ( op == "<=" ) {
         if ( comparingNum > argument ) type = NIL ;
       } // else if
-      else if ( opnd == "=" ) {
+      else if ( op == "=" ) {
         if ( comparingNum != argument ) type = NIL ;
       } // else if
-      
+
+      comparingNum = argument ;
     } // while
 
     string result = "#t" ;
@@ -1872,35 +2031,43 @@ private:
     return CreateNode( result, type ) ;
   } // BasicComparing()
 
-  Node* BasicString_Operate( string opnd, Node* root ) {
+  // Evaluate: string-append string>? string<? string=?
+  Node* BasicString_Operate( string op, Node* arg_root ) {
 
     // root only have parameters, not including function name
-    Node* cur = root ;
+    Node* cur = arg_root ;
+    Node* eval_argument = Evaluate( GetArgument( arg_root ) ) ;
+    mSemanticsAnalyzer_.Check_Basic_String_Argument( op, eval_argument ) ;
 
     // Get the first number
-    string first_arg = cur->left->content->value ;
+    string first_arg = eval_argument->content->value ;
     string result = "#t" ;
     TokenType type = T ;
 
     // Continue to get next number
     while ( cur->right != NULL ) {
       cur = cur->right ;
-      string argument = cur->left->content->value ;
+
+      // Get next evaluated argument
+      Node* eval_argument = Evaluate( GetArgument( cur ) ) ;
+      mSemanticsAnalyzer_.Check_Basic_String_Argument( op, eval_argument ) ;
+
+      string argument = eval_argument->content->value ;
       
       // Calculating
-      if ( opnd == "string-append" ) {
+      if ( op == "string-append" ) {
         first_arg = AppendString( first_arg, argument ) ;
         type = STRING ;
       } // if
-      else if ( opnd == "string>?" ) {
+      else if ( op == "string>?" ) {
         if ( first_arg.compare( argument ) <= 0 ) type = NIL ;
         first_arg = argument ;
       } // else if
-      else if ( opnd == "string<?" ) {
+      else if ( op == "string<?" ) {
         if ( first_arg.compare( argument ) >= 0 ) type = NIL ;
         first_arg = argument ;
       } // else if
-      else if ( opnd == "string=?" ) {
+      else if ( op == "string=?" ) {
         if ( first_arg.compare( argument ) != 0 ) type = NIL ;
         first_arg = argument ;
       } // else if
@@ -1923,20 +2090,26 @@ private:
     
     // root only have parameters, not including function name
     Node* cur = arg_root ;
-    Node* result = cur->left ;
+    Node* result = Evaluate( GetArgument( arg_root ) ) ;
 
     // Continue to get next value
     while ( cur != NULL ) {
       
-      if ( cur->left->content != NULL ) {
-        
-        TokenType arg_type = cur->left->content->type ;
+      // Get Evaluated Argument 
+      Node* eval_argument = Evaluate( GetArgument( cur ) ) ;
+      // mSemanticsAnalyzer_.Check_Basic_Boolean_Argument( "and", eval_argument ) ;
+
+      if ( eval_argument->content != NULL ) {
+        TokenType arg_type = eval_argument->content->type ;
         
         // Boolean Operating
         if ( arg_type == NIL ) return CreateNode( "nil", NIL ) ;
       } // if
 
-      if ( cur->right == NULL ) result = cur->left ;
+      // If the current node is last
+      if ( cur->right == NULL ) result = eval_argument ;
+      
+      // Go next argument
       cur = cur->right ;
     } // while
 
@@ -1948,19 +2121,25 @@ private:
     
     // root only have parameters, not including function name
     Node* cur = arg_root ;
-    Node* result = cur->left ;
+    Node* result = Evaluate( GetArgument( arg_root ) ) ;
 
     // Continue to get next value
     while ( cur != NULL ) {
+      
+      // Get Evaluated Argument 
+      Node* eval_argument = Evaluate( GetArgument( cur ) ) ;
+      // mSemanticsAnalyzer_.Check_Basic_Boolean_Argument( "or", eval_argument ) ;
 
-      if ( cur->left->content != NULL ) {
-        TokenType arg_type = cur->left->content->type ;
+      if ( eval_argument->content != NULL ) {
+        TokenType arg_type = eval_argument->content->type ;
         
         // Boolean Operating
-        if ( arg_type != NIL ) return cur->left ;
+        if ( arg_type != NIL ) return eval_argument ;
       } // if
 
-      if ( cur->right == NULL ) result = cur->left ;
+      if ( cur->right == NULL ) result = eval_argument ;
+
+      // Go next argument
       cur = cur->right ;
     } // while
 
@@ -1970,8 +2149,12 @@ private:
 
   Node* BasicNOT( Node* arg_root ) {
     
-    if ( arg_root->left->content == NULL ) return CreateNode( "nil", NIL ) ;
-    TokenType type = arg_root->left->content->type ;
+    // Get Evaluated Argument 
+    Node* eval_argument = Evaluate( GetArgument( arg_root ) ) ;
+    mSemanticsAnalyzer_.Check_Basic_Boolean_Argument( "not", eval_argument ) ;
+
+    if ( eval_argument->content == NULL ) return CreateNode( "nil", NIL ) ;
+    TokenType type = eval_argument->content->type ;
 
     if ( type == NIL ) return CreateNode( "#t", T ) ;
 
@@ -2070,15 +2253,13 @@ private:
   Node* Eval_Cond( Node* root ) {
     
     // Init and set up first condition node
-    Node* arg_root = root->right ; // arguments root
-    Node* cur = arg_root ;
-    Node* cond_root = cur->left ; // first condition statement
+    Node* cur = root->right ; // arguments root
     Node* condition = NULL ;
     int cond_count = 0 ;
 
     // correct format ( cond ( (condition) statement ) )
     while ( cur != NULL ) {
-      cond_root = cur->left ; // condition root
+      Node* cond_root = cur->left ; // condition root
       cond_count++ ;
 
       // ( cond 1 2 ) case
@@ -2097,8 +2278,8 @@ private:
 
       condition = Evaluate( cond_root->left ) ;
 
-      if ( condition->content == NULL || condition->content->type != NIL ) 
-        return Evaluate_All_And_Get_Last_Node_Result( cond_root ) ;
+      if ( condition->content == NULL || condition->content->type != NIL )
+        return Evaluate_All_And_Get_Last_Node_Result( cond_root->right ) ;
       
       // Go to next condtion
       cur = cur->right ;
@@ -2109,8 +2290,8 @@ private:
   } // Eval_Cond()
 
   // return the last evaluated element of a list
-  Node* Evaluate_All_And_Get_Last_Node_Result( Node* root ) {
-    Node* cur = root ;
+  Node* Evaluate_All_And_Get_Last_Node_Result( Node* cond_root ) {
+    Node* cur = cond_root ;
     Node* result = Evaluate( cur->left ) ;
 
     while ( cur->right != NULL ) {
@@ -2123,14 +2304,14 @@ private:
 
 
   // ---------- Functions ---------- //
-  // cons    (2), list   (>=0)
-  Node* Eval_Constructor( Node* root ) {
 
-    Node* cur = root ;
-    string function_name = cur->left->content->value ;
+  // cons    (2), list   (>=0)
+  Node* Eval_Constructor( string function_name, Node* root ) {
+
+    Node* arg_root = root->right ;
 
     // Go next node: first bypass argument
-    cur = cur->right ;
+    Node* cur = arg_root ;
 
     // ---------- Function: cons ---------- //
     if ( function_name == "cons" ) {
@@ -2140,13 +2321,19 @@ private:
         throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
 
       Node* first_arg = Evaluate( GetArgument( cur ) ) ;
-      Node* scecond_arg = Evaluate( GetArgument( cur->right ) ) ;
-
+      Node* second_arg = Evaluate( GetArgument( cur->right ) ) ;
+      
+      
+      Node* result = SystemFunctions::CreateNode() ;
       // Paired Node
-      root->left = first_arg ;
-      root->right = scecond_arg ;
+      result->left = first_arg ;
 
-      return root ;
+      // Check right node: ( cons 1 nil ) should be (1)
+      if ( second_arg->content != NULL && second_arg->content->type == NIL ) 
+        return result ;
+      result->right = second_arg ;
+
+      return result ;
       
     } // if
 
@@ -2154,37 +2341,40 @@ private:
     else if ( function_name == "list" ) {
       
       // if args == 0
-      if ( cur == NULL ) throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+      if ( cur == NULL ) return CreateNode( "nil", NIL ) ;
+      else if ( cur->content != NULL ) throw Exception( INCORRECT_LIST_FORMAT, root ) ;
       
-      Node* result = cur ;
+      Node* result_root = SystemFunctions::CreateNode() ;
+      Node* result_cur = result_root ;
       
-      cur->left = Evaluate( GetArgument( cur ) ) ;
+      result_root->left = Evaluate( GetArgument( cur ) ) ;
+
       while ( cur->right != NULL ) {
         cur = cur->right ;
-        cur->left = Evaluate( GetArgument( cur ) ) ;
+        // Pared Case
+        if ( cur->content != NULL && cur->content->type != NIL )
+          throw Exception( NON_LIST, root ) ;
+
+        result_cur = SystemFunctions::Go_Next_Node_And_Create( result_cur ) ;
+        result_cur->left = Evaluate( GetArgument( cur ) ) ;
       } // while
 
-      return result ;
+      return result_root ;
 
     } // else if
 
-    return cur ;
+    return NULL ;
   } // Eval_Constructor()
   
   // '       (1), quote  (1)
-  Node* Eval_Quote_Bypass( Node* root ) {
+  Node* Eval_Quote_Bypass( string function_name, Node* root ) {
 
-    Node* cur = root ;
-    string function_name = cur->left->content->value ;
-    // if ( function_name != "quote" ) throw Exception(  )
-
-    // Go next node: first bypass argument
-    cur = cur->right ;
+    Node* arg_root = root->right ;
 
     if ( function_name == "quote" || function_name == "\'" ) {
-      if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 1 ) )
+      if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( arg_root, 1 ) )
         throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
-      Node* first_arg = GetArgument( cur ) ;
+      Node* first_arg = GetArgument( arg_root ) ;
 
       return first_arg ;
     } // if
@@ -2193,23 +2383,26 @@ private:
   } // Eval_Quote_Bypass()
 
   // define  (2)
-  Node* Eval_Define( Node* root ) {
+  Node* Eval_Define( string function_name, Node* root ) {
 
-    Node* cur = root ;
-    string function_name = cur->left->content->value ;
+    Node* arg_root = root->right ;
 
     // ---------- step1: check format ---------- //
-    if ( function_name != "define" ) throw Exception( TESTING, function_name ) ;
-    // Go next node: first bypass argument
-    cur = cur->right ;
-
-    // Paired tree constructure: ( define a . 5 ) case
-    if ( cur->right != NULL && cur->right->content != NULL ) throw Exception( NON_LIST, root ) ;
+    // if ( function_name != "define" ) throw Exception( TESTING, function_name ) ;
+    
     // check arguments count and is no NULL
-    if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 2 ) ) 
+    if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( arg_root, 2 ) ) 
       throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
 
-    Node* first_arg = GetArgument( cur ) ;
+    // Paired tree constructure: ( define a . 5 ) case
+    if ( arg_root->right != NULL && arg_root->right->content != NULL ) throw Exception( NON_LIST, root ) ;
+    // ( define a 5 . 1 ) case, ( define a 5 . nil ) is ok
+    else if ( arg_root->right->right != NULL &&
+              arg_root->right->right->content != NULL &&
+              arg_root->right->right->content->type != NIL ) throw Exception( NON_LIST, root ) ;
+
+    Node* first_arg = GetArgument( arg_root ) ;
+
     // check if define name has wrong format or naming 
     if ( first_arg->content == NULL ) throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
     else if ( first_arg->content->type != SYMBOL ) 
@@ -2219,11 +2412,8 @@ private:
 
 
     // ---------- step2: binding ---------- //
-    Node* second_arg = GetArgument( cur->right ) ;
-    // if ( second_arg->content != NULL && TokenChecker::IsReserveWord( second_arg->content->value ) )
-    //   second_arg = GetArgument( cur->right ) ;
-    // else 
-    second_arg = Evaluate( GetArgument( cur->right ) ) ;
+    
+    Node* second_arg = Evaluate( GetArgument( arg_root->right ) ) ;
     mSymbolTable_.Insert( first_arg->content->value, second_arg ) ;
     
     cout << first_arg->content->value << " defined\n" ;
@@ -2231,49 +2421,48 @@ private:
   } // Eval_Define()
 
   // car     (1), cdr    (1)
-  Node* Eval_Part_Accessors( Node* root ) {
-    Node* cur = root ;
-    string function_name = cur->left->content->value ;
+  Node* Eval_Part_Accessors( string function_name, Node* root ) {
 
-    // Go next node: first bypass argument
-    cur = cur->right ;
+    Node* first_arg = root->right ; // access first bypass argument
 
-    // check arguments count
-    if ( cur->right != NULL && cur->right->content != NULL ) throw Exception( NON_LIST, root ) ;
     // Semantics Analyze argument count
-    else if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 1 ) ) 
+    if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( first_arg, 1 ) ) 
       throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+    // check pared arguments count
+    else if ( first_arg->right != NULL && first_arg->right->content != NULL ) 
+      throw Exception( NON_LIST, root ) ;
     
-    Node* result = Evaluate( GetArgument( cur ) ) ;
+    Node* result = Evaluate( GetArgument( first_arg ) ) ;
+    
     if ( result->content != NULL ) 
       throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, result->content->value ) ;
 
     // ---------- Function: car ---------- //
     if ( function_name == "car" ) {
       result = result->left ;
-      if ( result == NULL ) return CreateNode( "nil", NIL ) ; // return nil : it seems need to return error
+      if ( result == NULL ) return CreateNode( "nil", NIL ) ;
     } // if
     // ---------- Function: cdr ---------- //
     else if ( function_name == "cdr" ) {
       result = result->right ;
-      if ( result == NULL ) return CreateNode( "nil", NIL ) ; // return nil
+      if ( result == NULL ) return CreateNode( "nil", NIL ) ;
     } // else if
-    else throw Exception( TESTING, function_name ) ;
     
     return result ;
   } // Eval_Part_Accessors()
 
   // atom? pair? list? null? integer? real? number? string? boolean? symbol? (1)
-  Node* Eval_Primitive_Predicate( Node* root ) {
+  Node* Eval_Primitive_Predicate( string function_name, Node* root ) {
     Node* cur = root ;
-    string function_name = cur->left->content->value ;
+
     // Go next node: first bypass argument
     cur = cur->right ;
-    Node* first_arg = Evaluate( GetArgument( cur ) ) ;
-
+    
     // Semantics Analyze argument count
     if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( cur, 1 ) )
       throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
+
+    Node* first_arg = Evaluate( GetArgument( cur ) ) ;
 
     // ---------- Function: atom? ---------- //
     if ( function_name == "atom?" ) {
@@ -2311,7 +2500,8 @@ private:
     } // else if
 
     // ---------- Function: real? number?---------- //
-    else if ( function_name == "real?" || function_name == "number?" ) {
+    else if ( function_name == "real?" || 
+              function_name == "number?" ) {
       if ( first_arg->content == NULL ) return CreateNode( "nil", NIL ) ;
       else if ( IsReal( first_arg ) ) return CreateNode( "#t", T ) ;
       else return CreateNode( "nil", NIL ) ;
@@ -2342,43 +2532,69 @@ private:
   } // Eval_Primitive_Predicate()
 
   // not (1) + - * / and or > >= < <= = string-append string>? string<? string=? (>=2)
-  Node* Eval_Basic_Arithmetic( Node* root ) {
+  Node* Eval_Basic_Arithmetic( string function_name, Node* root ) {
     
-    Node* cur = root ;
-    string opnd = cur->left->content->value ;
+    Node* result_root = SystemFunctions::CreateNode() ;
+    Node* result_cur = result_root ;
+    string op = function_name ;
 
+    Node *byPassParameters = root->right ;
+    Node* cur = byPassParameters ;
+
+    // ---------- STEP1 Check Argument Count ---------- //
+    if ( function_name == "not" ) {
+      if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( byPassParameters, 1 ) )
+        throw Exception( INCORRECT_ARGUMENTS, op ) ;
+    } // if
+    else if ( ! mSemanticsAnalyzer_.Check_ArgCount_BiggerEqual_Than( byPassParameters, 2 ) ) {
+      throw Exception( INCORRECT_ARGUMENTS, op ) ;
+    } // else if
+    // // Get the first argument
+    // result_root->left = Evaluate( GetArgument( byPassParameters ) ) ;
+    
+    
+    // ---------- STEP2 Expanding ---------- //
     // if there are some nested list, they will expand in this while loop
-    while ( cur->right != NULL ) {
-      cur = cur->right ;
-      cur->left = Evaluate( GetArgument( cur ) ) ;
-    } // while
+    // while ( cur->right != NULL ) {
+    //   cur = cur->right ;
+    //   result_cur = SystemFunctions::Go_Next_Node_And_Create( result_cur ) ;
+    //   result_cur->left = Evaluate( GetArgument( cur ) ) ;
+    // } // while
 
-    // check if the format is correct
-    Node *formatCorrectRoot = mSemanticsAnalyzer_.ArithmeticCheck( root ) ;
-    Node *byPassParameters = formatCorrectRoot->right ;
-
-    // Execute eval
-    if ( opnd == "+" || opnd == "-" || opnd == "*" || opnd == "/" )
-      return BasicArithmaticCalculate( opnd, byPassParameters ) ;
-    else if ( opnd == ">" || opnd == ">=" || opnd == "<" || opnd == "<=" || opnd == "=" )
-      return BasicComparing( opnd, byPassParameters ) ;
-    else if ( opnd == "string-append" || opnd == "string>?" || opnd == "string<?" || opnd == "string=?" )
-      return BasicString_Operate( opnd, byPassParameters ) ;
-    else if ( opnd == "and" )
+    // ---------- STEP3 Check Format ---------- //
+    // check the format: ( + "Hi" 2 ) int and float can't exist in basic operator with string
+    // case1: ( + "Hi" 2 ) int and float can't exist in basic operator with string
+    // case2: ( "string-append" "Hi" 2 ) int and float can't exist in basic operator with string
+    // case3: ( / 2 0 ) divid zero
+    // case4: ( / 2 0 . 2 ) paired list
+    // case5: ( + '(1 2) '(3 4) ) had expanded, but still has a list 
+    // mSemanticsAnalyzer_.ArithmeticCheck( function_name, result_root, root ) ;
+    mSemanticsAnalyzer_.Check_No_Pared( root ) ;
+    
+    // ---------- STEP4 Evaluate ---------- //
+    if ( function_name == "+" || function_name == "-" ||
+         function_name == "*" || function_name == "/" )
+      return BasicArithmaticCalculate( op, byPassParameters ) ;
+    else if ( function_name == ">" || function_name == ">=" ||
+              function_name == "<" || function_name == "<=" || function_name == "=" )
+      return BasicComparing( op, byPassParameters ) ;
+    else if ( function_name == "string-append" || function_name == "string>?" ||
+              function_name == "string<?"      || function_name == "string=?" )
+      return BasicString_Operate( op, byPassParameters ) ;
+    else if ( function_name == "and" )
       return BasicAND( byPassParameters ) ;
-    else if ( opnd == "or" )
+    else if ( function_name == "or" )
       return BasicOR( byPassParameters ) ;
-    else if ( opnd == "not" )
+    else if ( function_name == "not" )
       return BasicNOT( byPassParameters ) ;
     
-    return formatCorrectRoot ;
+    return NULL ;
   } // Eval_Basic_Arithmetic()
 
   // eqv?    (2), equal? (2)
-  Node* Eval_Equivalence( Node* root ) {
+  Node* Eval_Equivalence( string function_name, Node* root ) {
 
     Node* cur = root ;
-    string function_name = cur->left->content->value ;
     // Go next node: first bypass argument
     cur = cur->right ;
 
@@ -2399,10 +2615,9 @@ private:
   } // Eval_Equivalence()
 
   // begin   (>=1)
-  Node* Eval_Begin( Node* root ) {
+  Node* Eval_Begin( string function_name, Node* root ) {
     Node* cur = root ;
     Node* arg_root = root->right ;
-    string function_name = cur->left->content->value ;
 
     if ( function_name == "begin" ) {
       if ( ! mSemanticsAnalyzer_.Check_ArgCount_BiggerEqual_Than( arg_root, 1 ) ) 
@@ -2415,10 +2630,9 @@ private:
   } // Eval_Begin()
 
   // if      (2 or 3), cond (>=1)
-  Node* Eval_Condition( Node* root ) {
+  Node* Eval_Condition( string function_name, Node* root ) {
     Node* cur = root ;
     Node* arg_root = root->right ;
-    string function_name = cur->left->content->value ;
 
     // ---------- Function: if ---------- //
     if ( function_name == "if" ) {
@@ -2439,9 +2653,8 @@ private:
   } // Eval_Condition()
 
   // clean-environment(0)
-  Node* Eval_Clean_Environment( Node* root ) {
+  Node* Eval_Clean_Environment( string function_name, Node* root ) {
 
-    string function_name = root->left->content->value ;
     if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( root->right, 0 ) )
       throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
     mSymbolTable_.Clear() ;
@@ -2451,8 +2664,8 @@ private:
   } // Eval_Clean_Environment()
 
   // exit(0)
-  Node* Eval_Exit( Node* root ) {
-    string function_name = root->left->content->value ;
+  Node* Eval_Exit( string function_name, Node* root ) {
+
     if ( ! mSemanticsAnalyzer_.Check_ArgCount_Equal_To( root->right, 0 ) )
       throw Exception( INCORRECT_ARGUMENTS, function_name ) ;
     mIsQuit = true ;
@@ -2463,26 +2676,26 @@ private:
   // ---------- Eval ---------- //
   Node* Evaluate( Node *root ) {
     
-    Node *cur = root ;
+    // Node *cur = root ;
     mLevel_++ ;
 
-    if ( cur == NULL ) return NULL ;
+    if ( root == NULL ) return NULL ;
 
     // ---------- CASE1 Atom || Symbol ---------- //
     // case1: Not a list
     // root node content has a value
-    if ( cur->content != NULL ) {
+    if ( root->content != NULL ) {
 
       // if what is being evaluated is an atom but not a symbol
-      if ( TokenChecker::IsAtom( cur->content->type ) && cur->content->type != SYMBOL ) {
+      if ( TokenChecker::IsAtom( root->content->type ) && root->content->type != SYMBOL ) {
         // return that atom
-        return cur ;
+        return root ;
       } // if
 
       // else if what is being evaluated is a symbol
-      else if ( cur->content->type == SYMBOL ) {
+      else if ( root->content->type == SYMBOL ) {
         // check whether it is bound to an S-expression or an internal function
-        Node* binding = mSymbolTable_.Get( cur->content->value ) ;
+        Node* binding = mSymbolTable_.Get( root->content->value ) ;
         // if ( binding->content != NULL && TokenChecker::IsReserveWord( binding->content->value ) )
         //   return mSymbolTable_.Get( binding->content->value ) ;
         return binding ; // mSymbolTable automatically check unbound
@@ -2496,11 +2709,16 @@ private:
       
       // Check Functional Argument
       // First argument check: if (...) is not a (pure) list
-      if ( cur->left == NULL ) throw Exception( NON_LIST ) ;
+      if ( root->left == NULL ) throw Exception( NON_LIST ) ;
+      else if ( root->right != NULL && root->right->content != NULL ) throw Exception( NON_LIST, root ) ;
       // First argument check: if is a list
-      else if ( cur->left->content == NULL ) cur->left = Evaluate( cur->left ) ;
-
+      else if ( root->left->content == NULL ) root->left = Evaluate( root->left ) ;
+      
+      // Get Evaluated First argument
       Node *first_argument = root->left ;
+
+      // If function node has nothing
+      if ( first_argument->content == NULL ) throw Exception( NON_FUNCTION, first_argument ) ;
 
       // ---------- First Argument ---------- //
       // First argument is not a symbol
@@ -2516,10 +2734,11 @@ private:
 
         // Get Symbol Binding
         if ( first_argument->content->primitiveType == NONE ) {
-          cur->left = mSymbolTable_.Get( first_argument->content->value ) ;
-          first_argument = cur->left ;
+
+          first_argument = mSymbolTable_.Get( first_argument->content->value ) ;
           // check if the SYM is the name of a known function
           CheckPrimitiveSymbol( first_argument->content ) ;
+          
           if ( first_argument->content->primitiveType == NONE )
             throw Exception( NON_FUNCTION, first_argument->content->value ) ;
         } // if
@@ -2529,82 +2748,83 @@ private:
 
         // if the current level is not the top level, and SYM is 'clean-environment'
         // or 'define' or　'exit'
-        if ( functional_token->primitiveType == EXIT && mLevel_ != 1 )
+        if ( functional_token->primitiveType == EXIT && mLevel_ != 1 ) {
           throw Exception( LEVEL_OF_EXIT ) ;
-
-        else if ( functional_token->primitiveType == DEFINE && mLevel_ != 1  )
+        } // if
+        else if ( functional_token->primitiveType == DEFINE && mLevel_ != 1 ) {
           throw Exception( LEVEL_OF_DEFINE ) ;
-
-        else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT &&  mLevel_ != 1  )
+        } // else if
+        else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT &&  mLevel_ != 1 ) {
           throw Exception( LEVEL_OF_CLEAN_ENVIRONMENT ) ;
+        } // else if
           
           
         // ---------- Eval Function ---------- //
         // ---------- CONSTRUCTOR ---------- //
         if ( functional_token->primitiveType == CONSTRUCTOR ) {
-          return Eval_Constructor( cur ) ;
+          return Eval_Constructor( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
         } // if
 
         // ---------- QUOTE_BYPASS ---------- //
         else if ( functional_token->primitiveType == QUOTE_BYPASS ) {
-          return Eval_Quote_Bypass( cur ) ;
+          return Eval_Quote_Bypass( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
         } // else if
 
         // ---------- DEFINE ---------- //
         else if ( functional_token->primitiveType == DEFINE ) {
-          return Eval_Define( cur ) ;
+          return Eval_Define( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
 
         } // else if
 
         // ---------- PART_ACCESSORS ---------- //
         else if ( functional_token->primitiveType == PART_ACCESSORS ) {
-          return Eval_Part_Accessors( cur ) ;
+          return Eval_Part_Accessors( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
 
         } // else if
 
         // ---------- PRIMITIVE_PREDICTATE ---------- //
         else if ( functional_token->primitiveType == PRIMITIVE_PREDICTATE ) {
-          return Eval_Primitive_Predicate( cur ) ;
+          return Eval_Primitive_Predicate( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
 
         } // else if
 
         // ---------- BASIC_ARITHMETIC ---------- //
         else if ( functional_token->primitiveType == BASIC_ARITHMETIC ) {
-          return Eval_Basic_Arithmetic( cur ) ;
+          return Eval_Basic_Arithmetic( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
 
         } // else if
 
         // ---------- EQUIVALENCE ---------- //
         else if ( functional_token->primitiveType == EQUIVALENCE ) {
-          return Eval_Equivalence( cur ) ;
+          return Eval_Equivalence( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
 
         } // else if
 
         // ---------- BEGIN ---------- //
         else if ( functional_token->primitiveType == BEGIN ) {
-          return Eval_Begin( cur ) ;
+          return Eval_Begin( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
         } // else if
 
         // ---------- CONDITIONAL ---------- //
         else if ( functional_token->primitiveType == CONDITIONAL ) {
-          return Eval_Condition( cur ) ;
+          return Eval_Condition( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
         } // else if
 
         // ---------- CLEAN_ENVIRONMENT ---------- //
         else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT ) {
-          return Eval_Clean_Environment( cur ) ;
+          return Eval_Clean_Environment( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
         } // else if
 
         // ---------- EXIT ---------- //
         else if ( functional_token->primitiveType == EXIT ) {
-          return Eval_Exit( cur ) ;
+          return Eval_Exit( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
         } // else if
         
       } // else if
       
     } // else
 
-    return cur ;
+    return NULL ;
     
   } // Evaluate()
 
@@ -2612,50 +2832,61 @@ private:
     string name = token->value ;
 
     // <CONSTRUCTOR> := cons list 
-    if ( name == "cons" || name == "list" ) token->primitiveType = CONSTRUCTOR ;
+    if ( name == "#<procedure cons>" || name == "#<procedure list>" )
+      token->primitiveType = CONSTRUCTOR ;
 
     // <QUOTE_BYPASS> := ' quote
-    else if ( name == "\'" || name == "quote" ) token->primitiveType = QUOTE_BYPASS ;
+    else if ( name == "#<procedure \'>" || name == "#<procedure quote>" )
+      token->primitiveType = QUOTE_BYPASS ;
 
     // <DEFINE> := define
-    else if ( name == "define" ) token->primitiveType = DEFINE ;
+    else if ( name == "#<procedure define>" )
+      token->primitiveType = DEFINE ;
 
     // <PART_ACCESSORS> := car cdr
-    else if ( name == "car" || name == "cdr" ) token->primitiveType = PART_ACCESSORS ;
+    else if ( name == "#<procedure car>" || name == "#<procedure cdr>" ) 
+      token->primitiveType = PART_ACCESSORS ;
 
     // <PRIMITIVE_PREDICTATE> :=
     // atom? pair? list? null? integer? real? number? string? boolean? symbol?
-    else if ( name == "atom?"    || name == "pair?"   ||
-              name == "list?"    || name == "null?"   ||
-              name == "integer?" || name == "real?"   ||
-              name == "number?"  || name == "string?" ||
-              name == "boolean?" || name == "symbol?" ) token->primitiveType = PRIMITIVE_PREDICTATE ;
+    else if ( name == "#<procedure atom?>"    || name == "#<procedure pair?>"   ||
+              name == "#<procedure list?>"    || name == "#<procedure null?>"   ||
+              name == "#<procedure integer?>" || name == "#<procedure real?>"   ||
+              name == "#<procedure number?>"  || name == "#<procedure string?>" ||
+              name == "#<procedure boolean?>" || name == "#<procedure symbol?>" )
+      token->primitiveType = PRIMITIVE_PREDICTATE ;
     
     // <BASIC_ARITHMETIC> :=
     // + - * / and or > >= < <= = not string>? string<? string=? string-append
-    else if ( name == "+"    || name == "-"   ||
-              name == "*"    || name == "/"   ||
-              name == "and"  || name == "or"  ||
-              name == ">"    || name == ">="  ||
-              name == "<"    || name == "<="  ||
-              name == "="    || name == "not" ||
-              name == "string>?" || name == "string<?" ||
-              name == "string=?" || name == "string-append" ) token->primitiveType = BASIC_ARITHMETIC ;
+    else if ( name == "#<procedure +>"    || name == "#<procedure ->"   ||
+              name == "#<procedure *>"    || name == "#<procedure />"   ||
+              name == "#<procedure and>"  || name == "#<procedure or>"  ||
+              name == "#<procedure >>"    || name == "#<procedure >=>"  ||
+              name == "#<procedure <>"    || name == "#<procedure <=>"  ||
+              name == "#<procedure =>"    || name == "#<procedure not>" ||
+              name == "#<procedure string>?>" || name == "#<procedure string<?>" ||
+              name == "#<procedure string=?>" || name == "#<procedure string-append>" )
+      token->primitiveType = BASIC_ARITHMETIC ;
 
     // <EQUIVALENCE> := eqv? equal?
-    else if ( name == "eqv?" || name == "equal?" ) token->primitiveType = EQUIVALENCE ;
+    else if ( name == "#<procedure eqv?>" || name == "#<procedure equal?>" )
+      token->primitiveType = EQUIVALENCE ;
 
     // <BEGIN> := begin
-    else if ( name == "begin" ) token->primitiveType = BEGIN ;
+    else if ( name == "#<procedure begin>" )
+      token->primitiveType = BEGIN ;
 
     // <CONDITIONAL> := if cond
-    else if ( name == "if" || name == "cond"  ) token->primitiveType = CONDITIONAL ;
+    else if ( name == "#<procedure if>" || name == "#<procedure cond>"  )
+      token->primitiveType = CONDITIONAL ;
 
     // <CLEAN_ENVIRONMENT> := clean-environment
-    else if ( name == "clean-environment" ) token->primitiveType = CLEAN_ENVIRONMENT ;
+    else if ( name == "#<procedure clean-environment>" )
+      token->primitiveType = CLEAN_ENVIRONMENT ;
 
     // <EXIT> := exit
-    else if ( name == "exit" ) token->primitiveType = EXIT ;
+    else if ( name == "#<procedure exit>" )
+      token->primitiveType = EXIT ;
 
 
   } // CheckPrimitiveSymbol()
