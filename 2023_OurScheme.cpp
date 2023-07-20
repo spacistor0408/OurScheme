@@ -1488,54 +1488,6 @@ private:
 
 public:
 
-  void ArithmeticCheck( string function_name, Node* result_root, Node* root ) {
-
-    Node* cur = result_root ;
-    string arithmetic_Operator = function_name ;
-
-    int operandCount = 0 ;
-
-    // if there is no argument
-    if ( cur == NULL ) throw Exception( INCORRECT_ARGUMENTS, arithmetic_Operator ) ;
-
-    // Through all nodes without Pared: check bypass argument 
-    while ( cur != NULL && cur->content == NULL ) {
-      operandCount++ ;
-
-      // Get the operand
-      Node* opnd = cur->left ;
-      // opnd is a list
-      if ( opnd == NULL ) throw Exception( INCORRECT_ARGUMENT_TYPE, arithmetic_Operator, opnd ) ;
-      // Check there still has list, even though s-expression had expanded
-      else if ( opnd->content == NULL && arithmetic_Operator != "not" )
-        throw Exception( INCORRECT_ARGUMENT_TYPE, arithmetic_Operator, opnd ) ;
-      
-
-      // if divid zero
-      if ( opnd->content != NULL      &&
-           arithmetic_Operator == "/" &&
-           operandCount > 1           &&
-           opnd->content->value == "0" ) throw Exception( DIVID_ZERO, arithmetic_Operator ) ; 
-
-      // Check if operand type correct?
-      if ( IsBasicArithmeticOperator( arithmetic_Operator ) ) {
-        if ( ! IsCorrectArithmeticType( opnd->content->type ) )
-          throw Exception( INCORRECT_ARGUMENT_TYPE, arithmetic_Operator, opnd->content->value ) ;
-      } // if: can only have INT FLOAT
-      else if ( IsBasicStringOperator( arithmetic_Operator ) ) {
-        if ( ! IsCorrectStringType( opnd->content->type ) )
-          throw Exception( INCORRECT_ARGUMENT_TYPE, arithmetic_Operator, opnd->content->value ) ;
-      } // else if: can only have STRING
-
-      // Go to next parameter
-      cur = cur->right ;
-
-    } // while 
-    
-    // Check paired list
-    if ( cur != NULL && cur->content != NULL ) throw Exception( NON_LIST, root ) ;
-
-  } // ArithmeticCheck()
 
   void Check_Basic_Arthmatic_Argument( string function_name, Node* argument ) {
     // Check if there still has list, even though s-expression had expanded
@@ -1570,7 +1522,6 @@ public:
     if ( argument->content == NULL && function_name != "not" )
       throw Exception( INCORRECT_ARGUMENT_TYPE, function_name, argument ) ;
   } // Check_Basic_Boolean_Argument()
-
 
   void Check_No_Pared( Node* root ) {
     Node* cur = root ;
@@ -2549,19 +2500,8 @@ private:
     else if ( ! mSemanticsAnalyzer_.Check_ArgCount_BiggerEqual_Than( byPassParameters, 2 ) ) {
       throw Exception( INCORRECT_ARGUMENTS, op ) ;
     } // else if
-    // // Get the first argument
-    // result_root->left = Evaluate( GetArgument( byPassParameters ) ) ;
     
-    
-    // ---------- STEP2 Expanding ---------- //
-    // if there are some nested list, they will expand in this while loop
-    // while ( cur->right != NULL ) {
-    //   cur = cur->right ;
-    //   result_cur = SystemFunctions::Go_Next_Node_And_Create( result_cur ) ;
-    //   result_cur->left = Evaluate( GetArgument( cur ) ) ;
-    // } // while
-
-    // ---------- STEP3 Check Format ---------- //
+    // ---------- STEP2 Check Pared ---------- //
     // check the format: ( + "Hi" 2 ) int and float can't exist in basic operator with string
     // case1: ( + "Hi" 2 ) int and float can't exist in basic operator with string
     // case2: ( "string-append" "Hi" 2 ) int and float can't exist in basic operator with string
@@ -2571,7 +2511,7 @@ private:
     // mSemanticsAnalyzer_.ArithmeticCheck( function_name, result_root, root ) ;
     mSemanticsAnalyzer_.Check_No_Pared( root ) ;
     
-    // ---------- STEP4 Evaluate ---------- //
+    // ---------- STEP3 Evaluate ---------- //
     if ( function_name == "+" || function_name == "-" ||
          function_name == "*" || function_name == "/" )
       return BasicArithmaticCalculate( op, byPassParameters ) ;
@@ -2710,7 +2650,9 @@ private:
       // Check Functional Argument
       // First argument check: if (...) is not a (pure) list
       if ( root->left == NULL ) throw Exception( NON_LIST ) ;
-      else if ( root->right != NULL && root->right->content != NULL ) throw Exception( NON_LIST, root ) ;
+      // Pared Case
+      else if ( root->right != NULL && root->right->content != NULL &&
+                root->right->content->type != NIL ) throw Exception( NON_LIST, root ) ;
       // First argument check: if is a list
       else if ( root->left->content == NULL ) root->left = Evaluate( root->left ) ;
       
