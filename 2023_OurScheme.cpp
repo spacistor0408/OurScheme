@@ -3087,7 +3087,7 @@ private:
 
   // ( lambda ( zero-or-more-symbols ) one-or-more-S-expressions )
   Node* Eval_Lambda( string function_name, Node* root ) {
-    
+   
     // ---------- STEP1: Check Arguments Count ---------- //
     Node* arg_root = root->right ;
     if ( ! mSemanticsAnalyzer_.Is_ArgCount_BiggerEqual_Than( arg_root, 2 ) )
@@ -3125,9 +3125,13 @@ private:
     Node* bypass_cur = SystemFunctions::CloneTree( bypass_arg_root ) ;
     Node* result = NULL ;
     string calling_func_name = root->left->content->value ;
+
+    // If is binding a lambda function, symbol table can't find name lambda function
+    if ( function_name == "lambda" ) function_name = calling_func_name ;
+    // cout << calling_func_name << " " << function_name << endl ;
     
     // ---------- STEP1: Check Argument Count ---------- //
-    Node* paramter = gSymbolTable.GetParameter( calling_func_name ) ;
+    Node* paramter = gSymbolTable.GetParameter( function_name ) ;
     mSemanticsAnalyzer_.Check_Call_Function_ByPass_Format( function_name, paramter, bypass_arg_root ) ;
 
     try {
@@ -3140,8 +3144,9 @@ private:
       } // while
 
       bypass_cur = temp ;
+      // Printer::PrettyPrint( bypass_cur ) ;
 
-      mCallStack_.Push( calling_func_name, bypass_cur ) ; // Call Stack and Bypass
+      mCallStack_.Push( function_name, bypass_cur ) ; // Call Stack and Bypass
 
       // ---------- STEP3: Eval Sequence of S-expression ---------- //
       FunctionSegment* calling_function = mCallStack_.Top() ;
@@ -3289,9 +3294,11 @@ private:
           CheckPrimitiveSymbol( first_argument->content ) ;
 
           // Printer::PrettyPrint( first_argument ) ;
+          // cout << first_argument->content->value << endl ;
 
-          // if ( IsUserDefineFunction( first_argument->content->value ) )
-          if ( gSymbolTable.IsFunctionSymbol( request_symbol_name ) )
+          // if ( gSymbolTable.IsFunctionSymbol( request_symbol_name ) )
+          if ( IsUserDefineFunction( first_argument->content->value ) ||
+               gSymbolTable.IsFunctionSymbol( request_symbol_name ) )
             isUserDefineFunction = true ;
           else if ( first_argument->content->primitiveType == NONE )
             throw Exception( NON_FUNCTION, first_argument->content ) ;
@@ -3311,6 +3318,7 @@ private:
             throw Exception( LEVEL_OF_CLEAN_ENVIRONMENT ) ;
           } // else if
           
+          // cout << isUserDefineFunction << endl ;
           
           if ( isUserDefineFunction ) {
             return CallFunction( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
