@@ -2745,7 +2745,7 @@ private:
         throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
 
       // Have Parameter
-      if ( define_name->right != NULL ) parameter = define_name->right ;
+      if ( first_arg->right != NULL ) parameter = first_arg->right ;
       else parameter = CreateNode( "nil", NIL ) ;
       expression = arg_root->right ;
       binding = CreateNode( CreateFunctionName( define_name->content->value ), SYMBOL ) ;
@@ -3224,16 +3224,18 @@ private:
       else if ( first_argument->content != NULL ) {
 
         // ---------- First Argument: NOT SYMBOL ---------- //
+        // First argument is not a symbol
         if ( TokenChecker::IsAtom( first_argument->content->type ) &&
             first_argument->content->type != SYMBOL ) 
           throw Exception( NON_FUNCTION, first_argument->content ) ;
         
         // ---------- First Argument: SYMBOL ---------- //
+        // else if first argument of (...) is a symbol SYM
         else if ( first_argument->content->type == SYMBOL || first_argument->content->type == QUOTE ) {
           
           bool IsUserDefineFunction = false ;
           // check if the SYM is the name of a known function
-
+          // Get Symbol Binding
           // if ( first_argument->content->primitiveType == NONE ) {
             
           string request_symbol_name = first_argument->content->value ;
@@ -3247,7 +3249,7 @@ private:
           // check if the SYM is the name of a known function
           CheckPrimitiveSymbol( first_argument->content ) ;
 
-          if ( IsFunction( first_argument->content ) ) 
+          if ( gSymbolTable.IsFunctionSymbol( request_symbol_name ) ) 
             IsUserDefineFunction = true ;
           else if ( first_argument->content->primitiveType == NONE )
             throw Exception( NON_FUNCTION, first_argument->content ) ;
@@ -3281,7 +3283,6 @@ private:
       // ---------- First Argument: HAS LIST ---------- //
       else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
 
-        bool IsFunction = false ;
         root->left = Evaluate( root->left ) ; // evaluate ( 。。。 )
         first_argument = root->left ;
 
@@ -3300,6 +3301,10 @@ private:
 
           // check if the symbol is user define function
           if ( functional_token->value == "#<procedure lambda>" && mLambda_Func_ != NULL ) {
+            // Get By Pass Argument
+            // Node* second_argument = NULL ;
+            // if ( root->right != NULL ) second_argument = root->right ;
+
             return CallFunction( root->right ) ; // (call function result)
           } // if
 
@@ -3551,14 +3556,6 @@ private:
 
   } // Evaluate_Function()
 
-  bool IsFunction( Token* token ) {
-    string name = token->value ;
-    if ( name.size() < 13 ) return false ;
-    if ( name.substr( 0, 12 ) == "#<procedure " && name.substr( name.size()-1, 1 ) == ">" )
-      return true ;
-    return false ;
-  } // IsFunction()
-
   void CheckPrimitiveSymbol( Token* token ) {
     string name = token->value ;
 
@@ -3629,6 +3626,14 @@ private:
 
 
   } // CheckPrimitiveSymbol()
+
+  bool IsFunction( Token* token ) {
+    string name = token->value ;
+    if ( name.size() < 14 ) return false ;
+    if ( name.substr( 0, 12 ) == "#<procedure " && name.substr( name.size()-1, 1 ) == ">" )
+      return true ;
+    return false ;
+  } // IsFunction()
 
   Token CopyToken( Node* node ) {
     Token newToken ;
