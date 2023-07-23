@@ -1854,10 +1854,10 @@ public:
 
   void Check_Lambda_Call_Function_ByPass_Format( Node* func_para, Node* bypass ) {
     
-    cout << "Function Parameter:\n" ;
-    Printer::PrettyPrint( func_para ) ;
-    cout << "ByPass Parameter:\n" ;
-    Printer::PrettyPrint( bypass ) ;  
+    // cout << "Function Parameter:\n" ;
+    // Printer::PrettyPrint( func_para ) ;
+    // cout << "ByPass Parameter:\n" ;
+    // Printer::PrettyPrint( bypass ) ;  
 
     if ( func_para == NULL )
       throw Exception( TESTING, "Call Function Check: func_parameter is null" ) ;
@@ -2678,6 +2678,8 @@ private:
   } // Eval_Quote_Bypass()
 
   // define  (2)
+  // ( define ( SYMBOL zero-or-more-symbols ) one-or-more-S-expressions )
+  // ( define SYMBOL S-expression )
   Node* Eval_Define( string function_name, Node* root ) {
 
     Node* arg_root = root->right ;
@@ -2686,7 +2688,7 @@ private:
     // if ( function_name != "define" ) throw Exception( TESTING, function_name ) ;
     
     // check arguments count and is no NULL
-    if ( ! mSemanticsAnalyzer_.Is_ArgCount_Equal_To( arg_root, 2 ) ) 
+    if ( ! mSemanticsAnalyzer_.Is_ArgCount_BiggerEqual_Than( arg_root, 2 ) ) 
       throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
 
     // Paired tree constructure: ( define a . 5 ) case
@@ -2697,21 +2699,40 @@ private:
               arg_root->right->right->content->type != NIL ) throw Exception( NON_LIST, root ) ;
 
     Node* first_arg = GetArgument( arg_root ) ;
+    Node* define_name = NULL ;
+    Node* parameter = NULL ;
+    Node* second_arg = NULL ;
 
-    // check if define name has wrong format or naming 
-    if ( first_arg->content == NULL ) throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
-    else if ( first_arg->content->type != SYMBOL ) 
-      throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
-    else if ( TokenChecker::IsReserveWord( first_arg->content->value ) ) 
-      throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
+    // ---------- Define Function ---------- //
+    if ( first_arg->content == NULL ) {
+      define_name = GetArgument( first_arg ) ;
+      if ( define_name == NULL || define_name->content == NULL || define_name->content->type != SYMBOL )
+        throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
+
+      // Have Parameter
+      if ( define_name->right != NULL ) parameter = define_name->right ;
+      else parameter = CreateNode( "nil", NIL ) ;
+      second_arg = arg_root->right ;
+    } // if
+    // ---------- Define Symbol ---------- //
+    else {
+      // check if define name has wrong format or naming 
+      if ( first_arg->content->type != SYMBOL ) 
+        throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
+      else if ( TokenChecker::IsReserveWord( first_arg->content->value ) ) 
+        throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
+      
+      define_name = first_arg ;
+      second_arg = Evaluate( GetArgument( arg_root->right ) ) ;
+    } // else
 
 
     // ---------- step2: binding ---------- //
     
-    Node* second_arg = Evaluate( GetArgument( arg_root->right ) ) ;
-    gSymbolTable.Insert( first_arg->content->value, NULL, second_arg ) ;
     
-    cout << first_arg->content->value << " defined\n" ;
+    gSymbolTable.Insert( define_name->content->value, parameter, second_arg ) ;
+    // cout << gSymbolTable.IsFunctionSymbol( define_name->content->value ) << endl ;
+    cout << define_name->content->value << " defined\n" ;
     return NULL ;
   } // Eval_Define()
 
@@ -3027,13 +3048,13 @@ private:
     Node* func_parameter_root = GetArgument( arg_root ) ;
     Node* expression = arg_root->right ;
 
+    delete mLambda_Func_ ;
     mLambda_Func_ = new Symbol() ;
     mLambda_Func_->name = "#<procedure lambda>" ;
     mLambda_Func_->parameter = func_parameter_root ;
     mLambda_Func_->binding = expression ;
 
-    if ( mLevel_ == 1 ) return CreateNode( mLambda_Func_->name, SYMBOL ) ;
-    return CreateNode( "lambda", SYMBOL ) ;
+    return CreateNode( mLambda_Func_->name, SYMBOL ) ;
     // ---------- STEP3: Record lambda function ---------- //
     
     
@@ -3046,16 +3067,16 @@ private:
     return root ;
   } // Eval_Set()
 
-  Node* CallFunction( string function_name, Node* arg_root ) {
+  Node* CallFunction( string function_name, Node* bypass_arg_root ) {
 
-    Node* cur = SystemFunctions::CloneTree( arg_root ) ;
+    Node* bypass_cur = SystemFunctions::CloneTree( bypass_arg_root ) ;
     Node* result = NULL ;
+
+    // ---------- STEP1: Check Argument Count ---------- //
+
     try {
       // ---------- STEP1: Call Stack ---------- //
-      while ( cur->right != NULL ) {
-        cur->left = Evaluate( GetArgument( cur ) ) ;
-      } // while
-      mCallStack_.Push( function_name, cur ) ;
+      mCallStack_.Push( function_name, bypass_cur ) ; // It will automatically check format and bypass
 
       // ---------- STEP2: Call Stack ---------- //
       FunctionSegment* calling_function = mCallStack_.Top() ;
@@ -3074,8 +3095,9 @@ private:
   Node* CallFunction( Node* bypass_arg_root ) {
     
 
-    // Get function parameter
-    Node* funcPara_cur = mLambda_Func_->parameter ;
+    // Get Function Information
+    Node* funcPara_cur = SystemFunctions::CloneTree( mLambda_Func_->parameter ) ;
+    Node* expression = SystemFunctions::CloneTree( mLambda_Func_->binding ) ;
     Node* result = NULL ;
 
     // ---------- STEP1: Check Argument Count ---------- //
@@ -3093,10 +3115,9 @@ private:
       if ( funcPara_cur != NULL && funcPara_cur->content == NULL ) {
         while ( funcPara_cur != NULL ) {
           Node* define_symbol = GetArgument( funcPara_cur ) ;
-          // bypass parameter
+
+          // Bypass parameter
           calling_function->ByPassParameter( define_symbol->content->value, GetArgument( bypass_cur ) ) ;
-          // Printer::PrettyPrint( define_symbol ) ; 
-          // Printer::PrettyPrint( bypass_cur ) ; 
 
           funcPara_cur = funcPara_cur->right ;
           bypass_cur = bypass_cur->right ; 
@@ -3104,7 +3125,7 @@ private:
       } // if
 
       // ---------- STEP4: Eval Sequence of S-expression ---------- //
-      result = Evaluate_All_And_Get_Last_Node_Result( mLambda_Func_->binding ) ;
+      result = Evaluate_All_And_Get_Last_Node_Result( expression ) ;
     } // try
     catch ( const Exception& e) {
       mCallStack_.Pop() ; // if there is any exception, then callstack pop
@@ -3151,157 +3172,112 @@ private:
     // what is being evaluated is (...)
     // root node content is NULL
     else {
-
       // ---------- Basic Check First Argument ---------- //
-      // First argument check: if (...) is not a (pure) list
+      Node *first_argument = root->left ;
       if ( root->left == NULL ) throw Exception( NON_LIST ) ;
-      // Pared Case
+
+      // First argument check: if (...) is not a (pure) list
       else if ( root->right != NULL && root->right->content != NULL &&
                 root->right->content->type != NIL ) throw Exception( NON_LIST, root ) ;
       // First argument check: if is a list
-      else if ( root->left->content == NULL ) root->left = Evaluate( root->left ) ;
+      // else if ( root->left->content == NULL ) root->left = Evaluate( root->left ) ;
       
-      // Get Evaluated First argument
-      Node *first_argument = root->left ;
+      // ---------- First Argument: HAS CONTENT ---------- //
+      else if ( first_argument->content != NULL ) {
 
-      // If function node has nothing
-      if ( first_argument->content == NULL ) throw Exception( NON_FUNCTION, first_argument ) ;
-
-      // ---------- First Argument: NOT SYMBOL ---------- //
-      // First argument is not a symbol
-      if ( TokenChecker::IsAtom( first_argument->content->type ) &&
-           first_argument->content->type != SYMBOL ) 
-        throw Exception( NON_FUNCTION, first_argument->content ) ;
-      
-      // ---------- First Argument: SYMBOL ---------- //
-      // else if first argument of (...) is a symbol SYM
-      else if ( first_argument->content->type == SYMBOL || first_argument->content->type == QUOTE ) {
+        // ---------- First Argument: NOT SYMBOL ---------- //
+        // First argument is not a symbol
+        if ( TokenChecker::IsAtom( first_argument->content->type ) &&
+            first_argument->content->type != SYMBOL ) 
+          throw Exception( NON_FUNCTION, first_argument->content ) ;
         
-        // check if the SYM is the name of a known function
-        // Get Symbol Binding
-        if ( first_argument->content->primitiveType == NONE ) {
+        // ---------- First Argument: SYMBOL ---------- //
+        // else if first argument of (...) is a symbol SYM
+        else if ( first_argument->content->type == SYMBOL || first_argument->content->type == QUOTE ) {
           
-          // ---------- STEP1: Check Call Stack ---------- //
+          bool IsUserDefineFunction = false ;
+          // check if the SYM is the name of a known function
+          // Get Symbol Binding
+          // if ( first_argument->content->primitiveType == NONE ) {
+            
           string request_symbol_name = first_argument->content->value ;
+          // ---------- Check Call Stack ---------- //
           if ( ( ! mCallStack_.IsEmpty() ) && mCallStack_.Top()->FindParameter( request_symbol_name ) )
               first_argument = mCallStack_.Top()->GetParameterBinding( request_symbol_name ) ;
           else
             first_argument = gSymbolTable.GetBinding( request_symbol_name ) ;
 
-          // ---------- STEP2: Check Functional Name ---------- //
+          // ---------- Check Functional Name ---------- //
           // check if the SYM is the name of a known function
           CheckPrimitiveSymbol( first_argument->content ) ;
 
-          // check if the symbol is user define function
-          if ( first_argument->content->value == "#<procedure lambda>" && mLambda_Func_ != NULL ) {
-            Node* second_argument = NULL ;
-            if ( root->right != NULL ) second_argument = root->right ;
-            return CallFunction( second_argument ) ; // (call function result)
-          } // if
-          // else if ( gSymbolTable.IsFunctionSymbol( first_argument->content->value ) ) {
-          //   // TODO: CALL Function
-          //   return CallFunction() ; // (call function result)
-          // } // if
+          if ( gSymbolTable.IsFunctionSymbol( request_symbol_name ) ) 
+            IsUserDefineFunction = true ;
           else if ( first_argument->content->primitiveType == NONE )
-            throw Exception( NON_FUNCTION, first_argument->content->value ) ;
-        } // if
+            throw Exception( NON_FUNCTION, first_argument->content ) ;
+          // } // if
 
-        Token* functional_token = first_argument->content ;
-
-        // cout << "[ " << mLevel_ << " ]" << endl ;
-        // cout << functional_token->value << endl ;
-        // cout << functional_token->primitiveType << endl << endl ;
-        
-        // if the current level is not the top level, and SYM is 'clean-environment'
-        // or 'define' or　'exit'
-        if ( functional_token->primitiveType == EXIT && mLevel_ != 1 ) {
-          throw Exception( LEVEL_OF_EXIT ) ;
-        } // if
-        else if ( functional_token->primitiveType == DEFINE && mLevel_ != 1 ) {
-          throw Exception( LEVEL_OF_DEFINE ) ;
-        } // else if
-        else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT &&  mLevel_ != 1 ) {
-          throw Exception( LEVEL_OF_CLEAN_ENVIRONMENT ) ;
-        } // else if
+          Token* functional_token = first_argument->content ;
           
-        // ---------- Eval Function ---------- //
+          // if the current level is not the top level, and SYM is 'clean-environment'
+          // or 'define' or　'exit'
+          if ( functional_token->primitiveType == EXIT && mLevel_ != 1 ) {
+            throw Exception( LEVEL_OF_EXIT ) ;
+          } // if
+          else if ( functional_token->primitiveType == DEFINE && mLevel_ != 1 ) {
+            throw Exception( LEVEL_OF_DEFINE ) ;
+          } // else if
+          else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT &&  mLevel_ != 1 ) {
+            throw Exception( LEVEL_OF_CLEAN_ENVIRONMENT ) ;
+          } // else if
+            
+          if ( IsUserDefineFunction ) {
+            return CallFunction( request_symbol_name, root->right ) ; // (call function result)
+          } // if
 
-        // if ( functional_token->value == "#<procedure set!>" ) {
-        //   return NULL ;
-        // } // if
-
-        // ---------- LET ---------- //
-        if ( functional_token->primitiveType == LET ) {
-          return Eval_Let( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+          return Evaluate_Function( functional_token, root ) ;
+          
         } // else if
 
-        // ---------- LAMBDA ---------- //
-        else if ( functional_token->primitiveType == LAMBDA ) {
-          // Binding #<procedure lambda> to a function
-          return Eval_Lambda( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-        } // else if
+        return NULL ;
+      } // if
 
-        // ---------- CONSTRUCTOR ---------- //
-        else if ( functional_token->primitiveType == CONSTRUCTOR ) {
-          return Eval_Constructor( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-        } // else if
+      // ---------- First Argument: HAS LIST ---------- //
+      else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
 
-        // ---------- QUOTE_BYPASS ---------- //
-        else if ( functional_token->primitiveType == QUOTE_BYPASS ) {
-          return Eval_Quote_Bypass( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-        } // else if
+        root->left = Evaluate( root->left ) ; // evaluate ( 。。。 )
+        first_argument = root->left ;
 
-        // ---------- DEFINE ---------- //
-        else if ( functional_token->primitiveType == DEFINE ) {
-          return Eval_Define( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+        // check whether the evaluated result (of ( 。。。 )) is an internal function
+        if ( first_argument->content != NULL ) {
+          
+          // check if the SYM is the name of a known function
+          // Get Symbol Binding
+          CheckPrimitiveSymbol( first_argument->content ) ;
 
-        } // else if
+          if ( first_argument->content->primitiveType == NONE ) {
+              throw Exception( NON_FUNCTION, first_argument->content ) ;
+          } // if
 
-        // ---------- PART_ACCESSORS ---------- //
-        else if ( functional_token->primitiveType == PART_ACCESSORS ) {
-          return Eval_Part_Accessors( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+          Token* functional_token = first_argument->content ;
 
-        } // else if
+          // check if the symbol is user define function
+          if ( functional_token->value == "#<procedure lambda>" && mLambda_Func_ != NULL ) {
+            // Get By Pass Argument
+            // Node* second_argument = NULL ;
+            // if ( root->right != NULL ) second_argument = root->right ;
 
-        // ---------- PRIMITIVE_PREDICTATE ---------- //
-        else if ( functional_token->primitiveType == PRIMITIVE_PREDICTATE ) {
-          return Eval_Primitive_Predicate( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+            return CallFunction( root->right ) ; // (call function result)
+          } // if
 
-        } // else if
+          // the evaluated result (of ( 。。。 )) is an internal function
+          return Evaluate_Function( functional_token, root ) ;
+        } // if
+        else {
+          throw Exception( NON_FUNCTION, first_argument ) ;
+        } // else
 
-        // ---------- BASIC_ARITHMETIC ---------- //
-        else if ( functional_token->primitiveType == BASIC_ARITHMETIC ) {
-          return Eval_Basic_Arithmetic( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-
-        } // else if
-
-        // ---------- EQUIVALENCE ---------- //
-        else if ( functional_token->primitiveType == EQUIVALENCE ) {
-          return Eval_Equivalence( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-
-        } // else if
-
-        // ---------- BEGIN ---------- //
-        else if ( functional_token->primitiveType == BEGIN ) {
-          return Eval_Begin( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-        } // else if
-
-        // ---------- CONDITIONAL ---------- //
-        else if ( functional_token->primitiveType == CONDITIONAL ) {
-          return Eval_Condition( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-        } // else if
-
-        // ---------- CLEAN_ENVIRONMENT ---------- //
-        else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT ) {
-          return Eval_Clean_Environment( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-        } // else if
-
-        // ---------- EXIT ---------- //
-        else if ( functional_token->primitiveType == EXIT ) {
-          return Eval_Exit( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-        } // else if
-        
-      } // else if
+      } // else
       
     } // else
 
@@ -3464,6 +3440,83 @@ private:
     return NULL ;
     
   } // Evaluate()
+
+  Node* Evaluate_Function( Token* functional_token, Node* root ) {
+
+    // ---------- LET ---------- //
+    if ( functional_token->primitiveType == LET ) {
+      return Eval_Let( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+    } // else if
+
+    // ---------- LAMBDA ---------- //
+    else if ( functional_token->primitiveType == LAMBDA ) {
+      // Binding #<procedure lambda> to a function
+      return Eval_Lambda( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+    } // else if
+
+    // ---------- CONSTRUCTOR ---------- //
+    else if ( functional_token->primitiveType == CONSTRUCTOR ) {
+      return Eval_Constructor( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+    } // else if
+
+    // ---------- QUOTE_BYPASS ---------- //
+    else if ( functional_token->primitiveType == QUOTE_BYPASS ) {
+      return Eval_Quote_Bypass( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+    } // else if
+
+    // ---------- DEFINE ---------- //
+    else if ( functional_token->primitiveType == DEFINE ) {
+      return Eval_Define( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+
+    } // else if
+
+    // ---------- PART_ACCESSORS ---------- //
+    else if ( functional_token->primitiveType == PART_ACCESSORS ) {
+      return Eval_Part_Accessors( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+
+    } // else if
+
+    // ---------- PRIMITIVE_PREDICTATE ---------- //
+    else if ( functional_token->primitiveType == PRIMITIVE_PREDICTATE ) {
+      return Eval_Primitive_Predicate( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+
+    } // else if
+
+    // ---------- BASIC_ARITHMETIC ---------- //
+    else if ( functional_token->primitiveType == BASIC_ARITHMETIC ) {
+      return Eval_Basic_Arithmetic( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+
+    } // else if
+
+    // ---------- EQUIVALENCE ---------- //
+    else if ( functional_token->primitiveType == EQUIVALENCE ) {
+      return Eval_Equivalence( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+
+    } // else if
+
+    // ---------- BEGIN ---------- //
+    else if ( functional_token->primitiveType == BEGIN ) {
+      return Eval_Begin( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+    } // else if
+
+    // ---------- CONDITIONAL ---------- //
+    else if ( functional_token->primitiveType == CONDITIONAL ) {
+      return Eval_Condition( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+    } // else if
+
+    // ---------- CLEAN_ENVIRONMENT ---------- //
+    else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT ) {
+      return Eval_Clean_Environment( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+    } // else if
+
+    // ---------- EXIT ---------- //
+    else if ( functional_token->primitiveType == EXIT ) {
+      return Eval_Exit( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
+    } // else if
+
+    return NULL ;
+
+  } // Evaluate_Function()
 
   void CheckPrimitiveSymbol( Token* token ) {
     string name = token->value ;
