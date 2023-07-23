@@ -192,7 +192,7 @@ public:
     newToken->type = token->type ;
     newToken->primitiveType = token->primitiveType ;
     return newToken ; 
-  } // CreateNewToken()
+  } // CloneToken()
 
   static Node* CreateNode( string name, TokenType type ) {
     Token* token = new Token() ;
@@ -246,7 +246,7 @@ public:
 
     return newNode ;
 
-  } // CloneTree
+  } // CloneTree()
 
   // From #<procedure +> Get +
   static string GetFunctName( string procedureFunct ) {
@@ -807,7 +807,7 @@ class Hash {
 class SymbolTable {
   
 private:
-  vector<Symbol*> *gSymbolTable ;
+  vector<Symbol*> *mSymbolTable ;
 
   // Variable Symbol
   Symbol* CreateSymbol( string name, Node* binding ) {
@@ -842,7 +842,7 @@ private:
     int key = Hash::Eval_Key( name ) ;
     int empty_node_Key = -1 ;
     int count = 0 ;
-    Symbol* cur = gSymbolTable->at( key ) ;
+    Symbol* cur = mSymbolTable->at( key ) ;
     
     // if same name, return the key
     if ( cur != NULL && cur->name == name ) return key ;
@@ -854,7 +854,7 @@ private:
 
       key++ ;
       key %= MAX_MEMORY_SIZE ; // avoid out of size ;
-      cur = gSymbolTable->at( key ) ;
+      cur = mSymbolTable->at( key ) ;
 
       // if all memory are fulled
       if ( count >= MAX_MEMORY_SIZE ) throw Exception( MEMORY_NOT_ENOUGH ) ;
@@ -892,14 +892,14 @@ private:
 
   // Return last define symbol
   Symbol* GetSymbol( int key ) {
-    Symbol* cur = gSymbolTable->at( key ) ;
+    Symbol* cur = mSymbolTable->at( key ) ;
     while ( cur->next != NULL ) cur = cur->next ;
     return cur ;
   } // GetSymbol()
 
 public:
   SymbolTable() {
-    gSymbolTable = new vector<Symbol*>( MAX_MEMORY_SIZE ) ;
+    mSymbolTable = new vector<Symbol*>( MAX_MEMORY_SIZE ) ;
   } // SymbolTable()
 
   Node* GetBinding( string name ) {
@@ -909,7 +909,7 @@ public:
       return GetReserveWordBinding( name ) ;
 
     int key = GetKey( name ) ;
-    if ( gSymbolTable->at( key ) == NULL ) throw Exception( UNBOUND_SYMBOL, name ) ;
+    if ( mSymbolTable->at( key ) == NULL ) throw Exception( UNBOUND_SYMBOL, name ) ;
 
     // Get the last symbol
     Symbol* symbol = GetSymbol( key ) ;
@@ -919,7 +919,7 @@ public:
 
   bool IsFunctionSymbol( string name ) {
     int key = GetKey( name ) ;
-    if ( gSymbolTable->at( key ) == NULL ) return false ;
+    if ( mSymbolTable->at( key ) == NULL ) return false ;
 
     Symbol* symbol = GetSymbol( key ) ;
     return ( symbol->isFunction ) ;
@@ -928,7 +928,7 @@ public:
   Node* GetParameter( string name ) {
 
     int key = GetKey( name ) ;
-    if ( gSymbolTable->at( key ) == NULL ) throw Exception( UNBOUND_SYMBOL, name ) ;
+    if ( mSymbolTable->at( key ) == NULL ) throw Exception( UNBOUND_SYMBOL, name ) ;
 
     // Get the last symbol
     Symbol* symbol = GetSymbol( key ) ;
@@ -939,25 +939,25 @@ public:
   Node* GetExpression( string name ) {
 
     int key = GetKey( name ) ;
-    if ( gSymbolTable->at( key ) == NULL ) throw Exception( UNBOUND_SYMBOL, name ) ;
+    if ( mSymbolTable->at( key ) == NULL ) throw Exception( UNBOUND_SYMBOL, name ) ;
 
     // Get the last symbol
     Symbol* symbol = GetSymbol( key ) ;
     
     return symbol->expression ;
-  } // GetParameter()
+  } // GetExpression()
 
   // if symbol exit, return true
   bool Find( string name ) {
     int key = GetKey( name ) ;
-    return ( gSymbolTable->at( key ) == NULL ) ;
+    return ( mSymbolTable->at( key ) == NULL ) ;
   } // Find()
 
   // Insert <Symbol, Parameter, Binding> to symble table
   // If there is same name sybol, append it
   void Insert( string name, Node* parameter, Node* expression, Node* binding ) {
     int key = GetKey( name ) ;
-    Symbol* cur = gSymbolTable->at( key ) ;
+    Symbol* cur = mSymbolTable->at( key ) ;
 
     // ---------- STEP1: Create a new symbol ---------- //
     Symbol* newSymbol = NULL ;
@@ -969,11 +969,11 @@ public:
     // ---------- STEP2: Insert to symbol table ---------- //
 
     // case1: No collision
-    if ( cur == NULL ) gSymbolTable->at( key ) = newSymbol ;
+    if ( cur == NULL ) mSymbolTable->at( key ) = newSymbol ;
     // case2: If the node dosen't free up, replace it
     else if ( cur->name == "\0" ) {
-      // delete gSymbolTable->at( key ) ;
-      gSymbolTable->at( key ) = newSymbol ;
+      // delete mSymbolTable->at( key ) ;
+      mSymbolTable->at( key ) = newSymbol ;
     } // else if
     // case3: If collision and the symbol has same name
     else if ( cur->name == name ) {
@@ -994,20 +994,20 @@ public:
 
     int key = GetKey( name ) ;
 
-    if ( gSymbolTable->at( key ) == NULL ) return ;
+    if ( mSymbolTable->at( key ) == NULL ) return ;
 
-    gSymbolTable->at( key )->name = "\0" ;
+    mSymbolTable->at( key )->name = "\0" ;
     // free the tree memory
-    FreeUpValue( gSymbolTable->at( key )->binding ) ;
-    gSymbolTable->at( key )->binding = NULL ;
+    FreeUpValue( mSymbolTable->at( key )->binding ) ;
+    mSymbolTable->at( key )->binding = NULL ;
 
     // TODO next Case
   } // Delete()
 
   // clear symbol table
   void Clear() {
-    gSymbolTable->clear() ;
-    gSymbolTable = new vector<Symbol*>( MAX_MEMORY_SIZE ) ;
+    mSymbolTable->clear() ;
+    mSymbolTable = new vector<Symbol*>( MAX_MEMORY_SIZE ) ;
   } // Clear()
 
 } ;
@@ -1021,7 +1021,7 @@ class FunctionSegment {
 
 private:
   string mFuntionName_ ;
-  map< string, Node* >* mLocalSymbolTable_ ;
+  map< string, Node* > mLocalSymbolTable_ ;
   Node* mParameter_ ;
   Node* mExpression_ ;
   Node* mReturn_ ;
@@ -1031,24 +1031,24 @@ public:
   // No name Function
   FunctionSegment() {
     // create a new local symbol table to save parameter
-    mLocalSymbolTable_ = new map< string, Node* >() ;
+    // mLocalSymbolTable_ = new map< string, Node* >() ;
   } // FunctionSegment()
 
   FunctionSegment( string func_name ) {
     // create a new local symbol table to save parameter
-    mLocalSymbolTable_ = new map< string, Node* >() ;
+    // mLocalSymbolTable_ = new map< string, Node* >() ;
     // Go to global symbol table and get function expression
     mExpression_ = gSymbolTable.GetExpression( func_name ) ;
     mParameter_ = gSymbolTable.GetParameter( func_name ) ;
   } // FunctionSegment()
   
   ~FunctionSegment() {
-    delete mLocalSymbolTable_ ;
+    // delete mLocalSymbolTable_ ;
   } // ~FunctionSegment()
 
   string GetName() {
     return mFuntionName_ ;
-  } // SetName()
+  } // GetName()
 
   // return NULL or parameters
   Node* GetParameter() {
@@ -1062,15 +1062,20 @@ public:
 
   // As calling function, bypass parameter
   void ByPassParameter( string para_name, Node* binding ) {
-    mLocalSymbolTable_->insert( { para_name, binding } ) ;
+    // mLocalSymbolTable_->insert( make_pair( para_name, binding ) ) ;
+    mLocalSymbolTable_[ para_name ] = binding ;
   } // ByPassParameter()
 
   Node* GetParameterBinding( string para_name ) {
-    return mLocalSymbolTable_->at( para_name ) ;
+    // Printer::PrettyPrint( mLocalSymbolTable_->at( para_name ) ) ; 
+    if ( mLocalSymbolTable_.count( para_name ) == 0 ) return NULL ;
+    return mLocalSymbolTable_[ para_name ] ;
+    // return mLocalSymbolTable_->at( para_name ) ;
   } // GetParameterBinding()
 
   bool FindParameter( string para_name ) {
-    return ( mLocalSymbolTable_->count( para_name ) > 0 ) ;
+    return ( mLocalSymbolTable_.count( para_name ) > 0 ) ;
+    // return ( mLocalSymbolTable_->count( para_name ) > 0 ) ;
   } // FindParameter()
 
 } ; // FunctionSegment
@@ -1744,7 +1749,7 @@ private:
     } // for
 
     return false ;
-  } // IsNameRepeat
+  } // IsNameRepeat()
 
 public:
   SemanticsAnalyzer() {
@@ -1881,7 +1886,7 @@ public:
 
   } // Check_Lambda_Call_Function_ByPass_Format()
 
-  void Check_Call_Function_ByPass_Format( Node* func_para, Node* bypass ) {
+  void Check_Call_Function_ByPass_Format( string func_name, Node* func_para, Node* bypass ) {
     
     // cout << "Function Parameter:\n" ;
     // Printer::PrettyPrint( func_para ) ;
@@ -1894,9 +1899,9 @@ public:
     else if ( bypass == NULL && func_para->content != NULL && func_para->content->type == NIL )
       return ;
     else if ( ! Is_ArgCount_Equal_To( func_para, bypass ) )
-      throw Exception( INCORRECT_ARGUMENTS, "expression" ) ;
+      throw Exception( INCORRECT_ARGUMENTS, func_name ) ;
 
-  } // Check_Lambda_Call_Function_ByPass_Format()
+  } // Check_Call_Function_ByPass_Format()
 
   // Check the tree arguments is equal to ?
   bool Is_ArgCount_Equal_To( Node* arg_root, int count ) {
@@ -2752,6 +2757,8 @@ private:
     } // if
     // ---------- Define Symbol ---------- //
     else {
+      if ( ! mSemanticsAnalyzer_.Is_ArgCount_Equal_To( arg_root, 2 ) )
+        throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
       // check if define name has wrong format or naming 
       if ( first_arg->content->type != SYMBOL ) 
         throw Exception( INCORRECT_DEFINE_FORMAT, root ) ;
@@ -2760,11 +2767,20 @@ private:
       
       define_name = first_arg ;
       binding = Evaluate( GetArgument( arg_root->right ) ) ;
+
+      // binding function
+      if ( binding->content != NULL && binding->content->value == "#<procedure lambda>" ) {
+        parameter = mLambda_Func_->parameter ;
+        expression = mLambda_Func_->binding ;
+      } // if
+      else if ( binding->content != NULL && IsUserDefineFunction( binding->content->value ) ) {
+        parameter = gSymbolTable.GetParameter( SystemFunctions::GetFunctName( binding->content->value ) ) ;
+        expression = gSymbolTable.GetExpression( SystemFunctions::GetFunctName( binding->content->value ) ) ;
+      } // else if
     } // else
 
 
     // ---------- Insert to Symbol Table ---------- //
-    
     
     gSymbolTable.Insert( define_name->content->value, parameter, expression, binding ) ;
     // cout << gSymbolTable.IsFunctionSymbol( define_name->content->value ) << endl ;
@@ -3035,7 +3051,7 @@ private:
     
     // ---------- STEP3: Call Stack ---------- //
     try { 
-      mCallStack_.Push() ; // No Name Function
+      if ( mCallStack_.IsEmpty() ) mCallStack_.Push() ; // No Name Function
 
       // there may be has a nil atom
       if ( func_parameter_root->content == NULL ) {
@@ -3103,24 +3119,36 @@ private:
     return root ;
   } // Eval_Set()
 
-  Node* CallFunction( string function_name, Node* bypass_arg_root ) {
+  Node* CallFunction( string function_name, Node* root ) {
 
+    Node* bypass_arg_root = root->right ;
     Node* bypass_cur = SystemFunctions::CloneTree( bypass_arg_root ) ;
     Node* result = NULL ;
-
+    string calling_func_name = root->left->content->value ;
+    
     // ---------- STEP1: Check Argument Count ---------- //
-    Node* paramter = gSymbolTable.GetParameter( function_name ) ;
-    mSemanticsAnalyzer_.Check_Call_Function_ByPass_Format( paramter, bypass_arg_root ) ;
+    Node* paramter = gSymbolTable.GetParameter( calling_func_name ) ;
+    mSemanticsAnalyzer_.Check_Call_Function_ByPass_Format( function_name, paramter, bypass_arg_root ) ;
 
     try {
       // ---------- STEP2: Call Stack ---------- //
-      mCallStack_.Push( function_name, bypass_cur ) ; // It will automatically check format and bypass
+      Node* temp = bypass_cur ;
+
+      while ( bypass_cur != NULL ) {
+        bypass_cur->left = Evaluate( GetArgument( bypass_cur ) ) ;
+        bypass_cur = bypass_cur->right ;
+      } // while
+
+      bypass_cur = temp ;
+
+      mCallStack_.Push( calling_func_name, bypass_cur ) ; // Call Stack and Bypass
 
       // ---------- STEP3: Eval Sequence of S-expression ---------- //
       FunctionSegment* calling_function = mCallStack_.Top() ;
+      
       result = Evaluate_All_And_Get_Last_Node_Result( calling_function->GetExpression() ) ;
     } // try
-    catch ( const Exception& e) {
+    catch ( const Exception& e ) {
       mCallStack_.Pop() ; // if there is any exception, then callstack pop
       throw e ;
     } // catch
@@ -3129,23 +3157,33 @@ private:
     return result ;
   } // CallFunction()
 
-  // For lambda
+  // #<procedure lambda>
   Node* CallFunction( Node* bypass_arg_root ) {
     
-
     // Get Function Information
     Node* funcPara_cur = SystemFunctions::CloneTree( mLambda_Func_->parameter ) ;
     Node* expression = SystemFunctions::CloneTree( mLambda_Func_->binding ) ;
     Node* result = NULL ;
 
     // ---------- STEP1: Check Argument Count ---------- //
+    
     mSemanticsAnalyzer_.Check_Lambda_Call_Function_ByPass_Format( funcPara_cur, bypass_arg_root ) ;
     
     // Clone calling bypass
     Node* bypass_cur = SystemFunctions::CloneTree( bypass_arg_root ) ;
 
+
     try {
       // ---------- STEP2: Call Stack ---------- //
+      Node* temp = bypass_cur ;
+
+      while ( bypass_cur != NULL ) {
+        bypass_cur->left = Evaluate( GetArgument( bypass_cur ) ) ;
+        bypass_cur = bypass_cur->right ;
+      } // while
+
+      bypass_cur = temp ;
+
       mCallStack_.Push() ;
       FunctionSegment* calling_function = mCallStack_.Top() ;
       
@@ -3165,7 +3203,7 @@ private:
       // ---------- STEP4: Eval Sequence of S-expression ---------- //
       result = Evaluate_All_And_Get_Last_Node_Result( expression ) ;
     } // try
-    catch ( const Exception& e) {
+    catch ( const Exception& e ) {
       mCallStack_.Pop() ; // if there is any exception, then callstack pop
       throw e ;
     } // catch
@@ -3180,7 +3218,7 @@ private:
     
     // ---------- Initialize ---------- //
     mLevel_++ ;
-
+    
     if ( root == NULL ) return NULL ;
 
     // ---------- CASE1: Atom || Symbol ---------- //
@@ -3200,9 +3238,11 @@ private:
 
         // Call Function Stack 
         if ( ( ! mCallStack_.IsEmpty() ) && mCallStack_.Top()->FindParameter( root->content->value ) )
-              return mCallStack_.Top()->GetParameterBinding( root->content->value ) ;
+          return mCallStack_.Top()->GetParameterBinding( root->content->value ) ;
+        // else if ( IsUserDefineFunction( root->content->value ) )
+        //   return gSymbolTable.GetExpression( SystemFunctions::GetFunctName( root->content->value ) ) ;
         
-        return gSymbolTable.GetBinding( root->content->value ) ; // mSymbolTable automatically check unbound
+        return gSymbolTable.GetBinding( root->content->value ) ; // gSymbolTable automatically check unbound
       } // else if
     } // if
 
@@ -3224,33 +3264,35 @@ private:
       else if ( first_argument->content != NULL ) {
 
         // ---------- First Argument: NOT SYMBOL ---------- //
-        // First argument is not a symbol
         if ( TokenChecker::IsAtom( first_argument->content->type ) &&
-            first_argument->content->type != SYMBOL ) 
+             first_argument->content->type != SYMBOL ) 
           throw Exception( NON_FUNCTION, first_argument->content ) ;
         
         // ---------- First Argument: SYMBOL ---------- //
-        // else if first argument of (...) is a symbol SYM
         else if ( first_argument->content->type == SYMBOL || first_argument->content->type == QUOTE ) {
           
-          bool IsUserDefineFunction = false ;
+          bool isUserDefineFunction = false ;
           // check if the SYM is the name of a known function
-          // Get Symbol Binding
+
           // if ( first_argument->content->primitiveType == NONE ) {
-            
-          string request_symbol_name = first_argument->content->value ;
+          
+          string request_symbol_name = first_argument->content->value ; // first symbol
           // ---------- Check Call Stack ---------- //
-          if ( ( ! mCallStack_.IsEmpty() ) && mCallStack_.Top()->FindParameter( request_symbol_name ) )
-              first_argument = mCallStack_.Top()->GetParameterBinding( request_symbol_name ) ;
+          if ( ( ! mCallStack_.IsEmpty() ) && mCallStack_.Top()->FindParameter( request_symbol_name ) ) 
+            first_argument = mCallStack_.Top()->GetParameterBinding( request_symbol_name ) ;
           else
             first_argument = gSymbolTable.GetBinding( request_symbol_name ) ;
 
           // ---------- Check Functional Name ---------- //
           // check if the SYM is the name of a known function
+          
           CheckPrimitiveSymbol( first_argument->content ) ;
 
-          if ( gSymbolTable.IsFunctionSymbol( request_symbol_name ) ) 
-            IsUserDefineFunction = true ;
+          // Printer::PrettyPrint( first_argument ) ;
+
+          // if ( IsUserDefineFunction( first_argument->content->value ) )
+          if ( gSymbolTable.IsFunctionSymbol( request_symbol_name ) )
+            isUserDefineFunction = true ;
           else if ( first_argument->content->primitiveType == NONE )
             throw Exception( NON_FUNCTION, first_argument->content ) ;
           // } // if
@@ -3268,11 +3310,12 @@ private:
           else if ( functional_token->primitiveType == CLEAN_ENVIRONMENT &&  mLevel_ != 1 ) {
             throw Exception( LEVEL_OF_CLEAN_ENVIRONMENT ) ;
           } // else if
-            
-          if ( IsUserDefineFunction ) {
-            return CallFunction( SystemFunctions::GetFunctName( functional_token->value ), root->right ) ;
+          
+          
+          if ( isUserDefineFunction ) {
+            return CallFunction( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
           } // if
-
+          
           return Evaluate_Function( functional_token, root ) ;
           
         } // else if
@@ -3294,17 +3337,13 @@ private:
           CheckPrimitiveSymbol( first_argument->content ) ;
 
           if ( first_argument->content->primitiveType == NONE ) {
-              throw Exception( NON_FUNCTION, first_argument->content ) ;
+            throw Exception( NON_FUNCTION, first_argument->content ) ;
           } // if
 
           Token* functional_token = first_argument->content ;
 
           // check if the symbol is user define function
           if ( functional_token->value == "#<procedure lambda>" && mLambda_Func_ != NULL ) {
-            // Get By Pass Argument
-            // Node* second_argument = NULL ;
-            // if ( root->right != NULL ) second_argument = root->right ;
-
             return CallFunction( root->right ) ; // (call function result)
           } // if
 
@@ -3319,172 +3358,17 @@ private:
       
     } // else
 
-
-    /*
-      if what is being evaluated is an atom but not a symbol
-
-        return that atom
-        
-      else if what is being evaluated is a symbol 
-
-        check whether it is bound to an S-expression or an internal function
-
-        if unbound
-          ERROR (unbound symbol) : abc
-        else 
-          return that S-expression or internal function (i.e., its binding)
-
-      else // what is being evaluated is (...) ; we call it the main S-expression below
-           // this (...) cannot be nil (nil is an atom)
-
-        if (...) is not a (pure) list
-          ERROR (non-list) : (...)  // (...)要pretty print
-
-        else if first argument of (...) is an atom ☆, which is not a symbol
-          ERROR (attempt to apply non-function) : ☆
-
-        else if first argument of (...) is a symbol SYM
-
-          check whether SYM is the name of a function (i.e., check whether 「SYM has a
-                                            binding, and that binding is an internal function」)
-
-          if SYM is the name of a known function
-
-            if the current level is not the top level, and SYM is 'clean-environment' or    
-                or 'define' or　'exit'
-
-              ERROR (level of CLEAN-ENVIRONMENT) / ERROR (level of DEFINE) / ERROR (level of EXIT)
-
-            else if SYM is 'define' or 'set!' or 'let' or 'cond' or 'lambda'
-
-              check the format of this expression // 注意：此時尚未check num-of-arg
-              // (define symbol    // 注意：只能宣告或設定 非primitive的symbol (這是final decision!)
-              //         S-expression
-              // )
-              // (define ( one-or-more-symbols )
-              //           one-or-more-S-expressions
-              // )
-              // (set! symbol
-              //       S-expression
-              // )
-              // (lambda (zero-or-more-symbols)
-              //           one-or-more-S-expressions
-              // )
-              // (let (zero-or-more-PAIRs)
-              //        one-or-more-S-expressions
-              // )
-              // (cond one-or-more-AT-LEAST-DOUBLETONs
-              // )
-              // where PAIR df= ( symbol S-expression )
-              //        AT-LEAST-DOUBLETON df= a list of two or more S-expressions
-
-              if format error (包括attempting to redefine system primitive) 
-                ERROR (COND format) : <the main S-exp> 
-                or
-                ERROR (DEFINE format) : <the main S-exp> // 有可能是因為redefining primitive之故
-                or
-                ERROR (SET! format) : <the main S-exp>    // 有可能是因為redefining primitive之故
-                or
-                ERROR (LET format) : <the main S-exp>     // 有可能是因為redefining primitive之故
-                or
-                ERROR (LAMBDA format) : <the main S-exp>  // 有可能是因為redefining primitive之故
-
-              evaluate ( ... ) 
-
-              return the evaluated result (and exit this call to eval())
-
-            else if SYM is 'if' or 'and' or 'or'
-
-              check whether the number of arguments is correct
-
-              if number of arguments is NOT correct
-                ERROR (incorrect number of arguments) : if
-
-              evaluate ( ... ) 
-
-              return the evaluated result (and exit this call to eval())
-
-            else // SYM is a known function name 'abc', which is neither 
-                  // 'define' nor 'let' nor 'cond' nor 'lambda'
-
-              check whether the number of arguments is correct
-
-              if number of arguments is NOT correct
-                ERROR (incorrect number of arguments) : abc
-
-          else // SYM is 'abc', which is not the name of a known function
-
-            ERROR (unbound symbol) : abc
-            or
-            ERROR (attempt to apply non-function) : ☆ // ☆ is the binding of abc
-
-        else // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
-
-          evaluate ( 。。。 )
-
-          // if any error occurs during the evaluation of ( 。。。 ), we just output an
-          // an appropriate error message, and we will not proceed any further
-
-          if no error occurs during the evaluation of ( 。。。 ) 
-
-            check whether the evaluated result (of ( 。。。 )) is an internal function
-
-            if the evaluated result (of ( 。。。 )) is an internal function
-
-              check whether the number of arguments is correct
-
-              if num-of-arguments is NOT correct
-                ERROR (incorrect number of arguments) : name-of-the-function
-                or
-                ERROR (incorrect number of arguments) : lambda expression 
-                                                              // in the case of nameless functions
-
-            else // the evaluated result (of ( 。。。 )) is not an internal function
-              ERROR (attempt to apply non-function) : ☆ //  ☆ is the evaluated result
-
-        end of 「else the first argument of ( ... ) is ( 。。。 )」
-          
-        eval the second argument S2 of (the main S-expression) ( ... )
-
-        if the type of the evaluated result is not correct 
-          ERROR (xxx with incorrect argument type) : the-evaluated-result
-          // xxx must be the name of some primitive function!
-
-        if no error
-          eval the third argument S3 of (the main S-expression) ( ... )
-
-        if the type of the evaluated result is not correct 
-          ERROR (xxx with incorrect argument type) : the-evaluated-result
-
-        ...
-
-        if no error
-
-          apply the binding of the first argument (an internal function) to S2-eval-result, 
-          S3-eval-result, ... 
-
-          if no error
-            if there is an evaluated result to be returned
-              return the evaluated result
-            else
-              ERROR (no return result) : name-of-this-function
-              or
-              ERROR (no return result) : lambda expression // if there is such a case ...
-
-      end // else what is being evaluated is (...) ; we call it the main S-expression
-
-     */
-
     return NULL ;
     
   } // Evaluate()
+
 
   Node* Evaluate_Function( Token* functional_token, Node* root ) {
 
     // ---------- LET ---------- //
     if ( functional_token->primitiveType == LET ) {
       return Eval_Let( SystemFunctions::GetFunctName( functional_token->value ), root ) ;
-    } // else if
+    } // if
 
     // ---------- LAMBDA ---------- //
     else if ( functional_token->primitiveType == LAMBDA ) {
@@ -3627,13 +3511,13 @@ private:
 
   } // CheckPrimitiveSymbol()
 
-  bool IsFunction( Token* token ) {
-    string name = token->value ;
+  bool IsUserDefineFunction( string name ) {
     if ( name.size() < 14 ) return false ;
+    else if ( TokenChecker::IsReserveWord( SystemFunctions::GetFunctName( name ) ) ) return false ;
     if ( name.substr( 0, 12 ) == "#<procedure " && name.substr( name.size()-1, 1 ) == ">" )
       return true ;
     return false ;
-  } // IsFunction()
+  } // IsUserDefineFunction()
 
   Token CopyToken( Node* node ) {
     Token newToken ;
