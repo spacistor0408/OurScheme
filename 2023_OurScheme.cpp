@@ -2188,8 +2188,9 @@ private:
   SemanticsAnalyzer mSemanticsAnalyzer_ ;
   CallStack mCallStack_ ;
   Symbol* mLambda_Func_ ;
-  vector<Token> *mCommand_ ;
+
   int mLevel_ ;
+  int mLet_Reccursion_Times ;
   bool mIsQuit ;
 
   Node* CreateNode( string name, TokenType type ) {
@@ -3036,7 +3037,7 @@ private:
   // '.........' is a non-empty (!!!) sequence of S-expressions.
   // In words, 'let' has at least two parameters.
   Node* Eval_Let( string function_name, Node* root ) {
-
+    
     // ---------- STEP1: Check Arguments Count ---------- //
     Node* arg_root = root->right ; // Get arguments
     if ( ! mSemanticsAnalyzer_.Is_ArgCount_BiggerEqual_Than( root->right, 2 ) )
@@ -3047,26 +3048,40 @@ private:
     // ---------- STEP2: Check Arguments Format ---------- //
     // Check Format: (( ... ) ( ... ) ) or ()
     mSemanticsAnalyzer_.Check_Let_Format_Correct( arg_root ) ;
-    Node* func_parameter_root = GetArgument( arg_root ) ;
+    Node* func_parameter_root = SystemFunctions::CloneTree( GetArgument( arg_root ) ) ;
     
     // ---------- STEP3: Call Stack ---------- //
     try { 
       if ( mCallStack_.IsEmpty() ) mCallStack_.Push() ; // No Name Function
-
+      mLet_Reccursion_Times ++ ;
       // there may be has a nil atom
       if ( func_parameter_root->content == NULL ) {
         FunctionSegment* calling_function = mCallStack_.Top() ;
         // Double Check there has a func seg
         if ( calling_function == NULL ) throw Exception( TESTING, "eval_let" ) ; // debug
+        
+        Node* cur = func_parameter_root ;
+        // Evaluate all binding value
+        while ( cur != NULL ) {
 
-        while ( func_parameter_root != NULL ) {
+          Node* cur_arg = GetArgument( cur ) ;
+          // Update the binding value and append to cloned tree
+          cur_arg->right->left = Evaluate( GetArgument( cur_arg->right ) ) ;
+          cur = cur->right ;
+        } // while
+
+        cur = func_parameter_root ;
+
+        // ByPass Value to call function
+        while ( cur != NULL ) {
           
-          Node* cur_arg = GetArgument( func_parameter_root ) ;
+          Node* cur_arg = GetArgument( cur ) ;
           Node* define_symbol = GetArgument( cur_arg ) ;
-          Node* binding = Evaluate( GetArgument( cur_arg->right ) ) ;
+          Node* binding = GetArgument( cur_arg->right ) ;
           
           calling_function->ByPassParameter( define_symbol->content->value, binding ) ;
-          func_parameter_root = func_parameter_root->right ;
+          
+          cur = cur->right ;
         } // while
 
       } // if
@@ -3081,7 +3096,8 @@ private:
       throw e ;
     } // catch
 
-    mCallStack_.Pop() ;
+    mLet_Reccursion_Times -- ;
+    if ( mLet_Reccursion_Times == 0 ) mCallStack_.Pop() ;
     return result ;
   } // Eval_Let()
 
@@ -3262,8 +3278,6 @@ private:
       // First argument check: if (...) is not a (pure) list
       else if ( root->right != NULL && root->right->content != NULL &&
                 root->right->content->type != NIL ) throw Exception( NON_LIST, root ) ;
-      // First argument check: if is a list
-      // else if ( root->left->content == NULL ) root->left = Evaluate( root->left ) ;
       
       // ---------- First Argument: HAS CONTENT ---------- //
       else if ( first_argument->content != NULL ) {
@@ -3537,14 +3551,15 @@ private:
   void Init() {
     if ( mLambda_Func_ != NULL ) delete mLambda_Func_ ;
     mLambda_Func_ = NULL ;
+    mLet_Reccursion_Times = 0 ;
   } // Init()
 
 public:
 
   Evaluator() {
-    mCommand_ = new vector<Token>() ;
     mLambda_Func_ = NULL ;
     mLevel_ = 0 ;
+    mLet_Reccursion_Times = 0 ;
     mIsQuit = false ;
   } // Evaluator()
 
